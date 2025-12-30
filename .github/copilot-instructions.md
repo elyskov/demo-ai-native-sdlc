@@ -81,8 +81,4 @@ Enforcement
 -----------
 
 Treat this file as the canonical source of rules for Copilot-assisted development and for humans following Copilot suggestions. If a suggested change violates these rules, prefer producing an alternative that adheres to them. When in doubt, create a small Issue to discuss the proposed deviation and include the Copilot prompt that produced it.
-
-Location
---------
-
-Place this file at the repository root as `copilot-instructions.md`. Updates to these instructions should be tracked through normal PR workflows and referenced in the project's `README.md` when significant.
+Updates to these instructions should be tracked through normal PR workflows and referenced in the project's `README.md` when significant.
