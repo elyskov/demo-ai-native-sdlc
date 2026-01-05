@@ -1,0 +1,34 @@
+{
+  "name": "demo-ai-native-sdlc-backend",
+  "version": "0.1.0",
+  "private": true,
+  "description": "Nest.js backend API for demo-ai-native-sdlc",
+  "license": "UNLICENSED",
+  "main": "dist/main.js",
+  "scripts": {
+    "build": "tsc -p tsconfig.build.json",
+    "prestart": "npm run build",
+    "start": "node dist/main.js",
+    "start:dev": "ts-node --transpile-only src/main.ts",
+    "lint": "echo 'lint not configured'",
+    "test": "echo 'tests not configured'"
+  },
+  "dependencies": {
+    "@nestjs/common": "^10.4.15",
+    "@nestjs/core": "^10.4.15",
+    "@nestjs/platform-express": "^10.4.15",
+    "class-transformer": "^0.5.1",
+    "class-validator": "^0.14.1",
+    "reflect-metadata": "^0.2.2",
+    "rxjs": "^7.8.1"
+  },
+  "devDependencies": {
+    "@types/express": "^4.17.21",
+    "@types/node": "^22.10.7",
+    "ts-node": "^10.9.2",
+    "typescript": "^5.7.3"
+  },
+  "engines": {
+    "node": ">=22"
+  }
+}

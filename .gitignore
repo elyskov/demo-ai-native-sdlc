@@ -18,8 +18,6 @@ out/
 next-env.d.ts
 
 ### Docker
-**/Dockerfile
-**/docker-compose*.yml
 docker-compose.override.yml
 docker-compose.local.yml
 
