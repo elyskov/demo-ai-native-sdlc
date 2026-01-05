@@ -1,0 +1,12 @@
+services:
+  backend:
+    build:
+      context: ./services/backend
+      dockerfile: Dockerfile
+    ports:
+      - "3000:3000"
+    environment:
+      PORT: "3000"
+      APP_NAME: "demo-ai-native-sdlc-backend"
+      APP_ENV: "local"
+      NODE_ENV: "production"
