@@ -15,6 +15,21 @@ async function bootstrap() {
     logger,
   });
 
+  app.enableCors({
+    origin: (origin, callback) => {
+      // Allow same-origin, curl, and local browser tooling. Note: CSP errors are enforced
+      // by the calling page/tool, not by this API.
+      if (!origin || origin === 'null') {
+        return callback(null, true);
+      }
+
+      const isLocalhost = /^http:\/\/(localhost|127\.0\.0\.1)(:\d+)?$/.test(origin);
+      return callback(isLocalhost ? null : new Error('Not allowed by CORS'), isLocalhost);
+    },
+    methods: ['GET', 'POST', 'PUT', 'DELETE', 'OPTIONS'],
+    allowedHeaders: ['Content-Type', 'Authorization'],
+  });
+
   app.use(requestLoggerMiddleware(logger));
 
   app.useGlobalPipes(
