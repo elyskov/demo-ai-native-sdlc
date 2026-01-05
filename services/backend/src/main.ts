@@ -1,6 +1,7 @@
 import 'reflect-metadata';
 import { Logger, ValidationPipe } from '@nestjs/common';
 import { NestFactory } from '@nestjs/core';
+import { DocumentBuilder, SwaggerModule } from '@nestjs/swagger';
 
 import { AppModule } from './app.module';
 import { HttpExceptionFilter } from './shared/http-exception.filter';
@@ -25,6 +26,14 @@ async function bootstrap() {
   );
 
   app.useGlobalFilters(new HttpExceptionFilter(logger));
+
+  const swaggerConfig = new DocumentBuilder()
+    .setTitle('demo-ai-native-sdlc backend')
+    .setDescription('Backend API for managing Mermaid diagrams')
+    .setVersion('0.1')
+    .build();
+  const swaggerDoc = SwaggerModule.createDocument(app, swaggerConfig);
+  SwaggerModule.setup('api/docs', app, swaggerDoc);
 
   const port = Number(process.env.PORT ?? 3000);
   await app.listen(port, '0.0.0.0');
