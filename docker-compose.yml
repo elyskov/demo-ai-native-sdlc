@@ -10,3 +10,8 @@ services:
       APP_NAME: "demo-ai-native-sdlc-backend"
       APP_ENV: "local"
       NODE_ENV: "production"
+    volumes:
+      - backend_diagrams:/app/diagrams
+
+volumes:
+  backend_diagrams:
