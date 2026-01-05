@@ -32,3 +32,24 @@ Prerequisites
 - A GitHub account (to use Copilot and push to the remote)
 - Node.js (LTS recommended)
 - Docker & Docker Compose (for local container workflows)
+
+Backend (Nest.js)
+----------------
+
+The backend lives in `services/backend`.
+
+Run with Docker (image)
+~~~~~~~~~~~~~~~~~~~~~~
+
+- Build: `docker build -t demo-ai-native-sdlc-backend:local ./services/backend`
+- Run: `docker run --rm -p 3000:3000 -e APP_ENV=local -e APP_NAME=demo-ai-native-sdlc-backend demo-ai-native-sdlc-backend:local`
+
+Run with Docker Compose
+~~~~~~~~~~~~~~~~~~~~~~~
+
+- Start: `docker compose up --build`
+
+Check locally
+~~~~~~~~~~~~~
+
+- Health endpoint: http://localhost:3000/health
