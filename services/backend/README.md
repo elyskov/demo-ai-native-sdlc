@@ -19,3 +19,7 @@ REST endpoints (JSON):
 Swagger/OpenAPI:
 
 - `GET /api/docs`
+
+Notes:
+
+- `POST /api/diagrams` generates a server-side `id` (16 chars of `[0-9a-zA-Z_]`).

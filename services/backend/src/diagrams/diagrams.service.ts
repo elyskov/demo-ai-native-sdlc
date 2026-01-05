@@ -5,7 +5,7 @@ import {
   NotFoundException,
   OnModuleInit,
 } from '@nestjs/common';
-import { randomUUID } from 'node:crypto';
+import { randomBytes } from 'node:crypto';
 import { promises as fs } from 'node:fs';
 import * as path from 'node:path';
 
@@ -27,7 +27,8 @@ export type DiagramEntity = {
   content: string;
 };
 
-const ID_RE = /^[a-zA-Z0-9_-]{1,64}$/;
+const ID_RE = /^[0-9a-zA-Z_]{16}$/;
+const ID_CHARSET = '0123456789abcdefghijklmnopqrstuvwxyzABCDEFGHIJKLMNOPQRSTUVWXYZ_';
 
 @Injectable()
 export class DiagramsService implements OnModuleInit {
@@ -67,17 +68,11 @@ export class DiagramsService implements OnModuleInit {
   }
 
   async create(input: {
-    id?: string;
     name: string;
     content: string;
   }): Promise<DiagramEntity> {
     return this.withWriteLock(async () => {
-      const id = input.id?.trim() || randomUUID();
-      this.assertSafeId(id);
-
-      if (this.metadataById.has(id)) {
-        throw new BadRequestException(`Diagram '${id}' already exists`);
-      }
+      const id = this.generateId();
 
       const name = input.name.trim();
       const content = input.content;
@@ -153,9 +148,38 @@ export class DiagramsService implements OnModuleInit {
   private assertSafeId(id: string) {
     if (!ID_RE.test(id)) {
       throw new BadRequestException(
-        `Invalid diagram id. Use 1-64 chars of [a-zA-Z0-9_-]`,
+        `Invalid diagram id. Expected 16 chars of [0-9a-zA-Z_]`,
       );
     }
+  }
+
+  private generateId(): string {
+    // 63-character alphabet; use rejection sampling to avoid modulo bias.
+    // Collision handling: retry a few times; extremely unlikely for this scale.
+    for (let attempt = 0; attempt < 10; attempt++) {
+      const id = this.randomIdFromCharset(16);
+      if (!this.metadataById.has(id)) {
+        return id;
+      }
+    }
+    throw new BadRequestException('Failed to generate a unique diagram id');
+  }
+
+  private randomIdFromCharset(length: number): string {
+    const alphabet = ID_CHARSET;
+    const alphabetSize = alphabet.length; // 63
+    const maxUnbiased = Math.floor(256 / alphabetSize) * alphabetSize; // 252
+
+    let result = '';
+    while (result.length < length) {
+      const bytes = randomBytes(32);
+      for (const byte of bytes) {
+        if (byte >= maxUnbiased) continue;
+        result += alphabet[byte % alphabetSize];
+        if (result.length === length) break;
+      }
+    }
+    return result;
   }
 
   private async withWriteLock<T>(fn: () => Promise<T>): Promise<T> {
