@@ -6,5 +6,6 @@ import { DiagramsService } from './diagrams.service';
 @Module({
   controllers: [DiagramsController],
   providers: [DiagramsService],
+  exports: [DiagramsService],
 })
 export class DiagramsModule {}
