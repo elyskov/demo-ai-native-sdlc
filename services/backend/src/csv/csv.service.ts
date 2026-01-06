@@ -1,0 +1,89 @@
+import {
+  BadRequestException,
+  Inject,
+  Injectable,
+  Logger,
+  NotFoundException,
+} from '@nestjs/common';
+
+import { DiagramsService } from '../diagrams/diagrams.service';
+import type { CsvDataset, CsvElement } from './models/csv.models';
+import { CSV_DATASET_GENERATOR } from './csv.generator';
+import type { CsvDatasetGenerator } from './csv.generator';
+
+const TYPE_RE = /^[0-9a-zA-Z_-]{1,64}$/;
+
+@Injectable()
+export class CsvService {
+  private readonly logger = new Logger(CsvService.name);
+
+  constructor(
+    private readonly diagramsService: DiagramsService,
+    @Inject(CSV_DATASET_GENERATOR) private readonly generator: CsvDatasetGenerator,
+  ) {}
+
+  async listTypes(diagramId: string): Promise<{ diagramId: string; diagramName: string; types: string[] }> {
+    const dataset = await this.getDataset(diagramId);
+    return {
+      diagramId: dataset.diagramId,
+      diagramName: dataset.diagramName,
+      types: dataset.elements.map((e) => e.type).sort(),
+    };
+  }
+
+  async getCsvElement(diagramId: string, type: string): Promise<{ dataset: CsvDataset; element: CsvElement }> {
+    if (!TYPE_RE.test(type)) {
+      throw new BadRequestException('Invalid type');
+    }
+
+    const dataset = await this.getDataset(diagramId);
+    const element = dataset.elements.find((e) => e.type === type);
+    if (!element) {
+      throw new NotFoundException(`CSV type '${type}' not found for diagram '${diagramId}'`);
+    }
+
+    return { dataset, element };
+  }
+
+  async getArchiveDataset(diagramId: string): Promise<CsvDataset> {
+    return this.getDataset(diagramId);
+  }
+
+  private async getDataset(diagramId: string): Promise<CsvDataset> {
+    const diagram = await this.diagramsService.get(diagramId);
+
+    const dataset = await this.generator.generate({
+      diagramId: diagram.id,
+      diagramName: diagram.name,
+      diagramContent: diagram.content,
+    });
+
+    if (!dataset?.elements || !Array.isArray(dataset.elements)) {
+      throw new BadRequestException('CSV generator returned an invalid dataset');
+    }
+
+    const seen = new Set<string>();
+    for (const el of dataset.elements) {
+      if (!el || typeof el.type !== 'string' || typeof el.csvContent !== 'string') {
+        throw new BadRequestException('CSV generator returned an invalid element');
+      }
+      if (!TYPE_RE.test(el.type)) {
+        throw new BadRequestException(`CSV type '${el.type}' is invalid`);
+      }
+      if (seen.has(el.type)) {
+        throw new BadRequestException(`CSV type '${el.type}' is duplicated in dataset`);
+      }
+      seen.add(el.type);
+    }
+
+    if (dataset.elements.length === 0) {
+      this.logger.warn(`CSV dataset for diagram '${diagramId}' is empty`);
+    } else {
+      this.logger.log(
+        `Generated CSV dataset for diagram '${diagramId}' (${dataset.elements.length} files)`,
+      );
+    }
+
+    return dataset;
+  }
+}
