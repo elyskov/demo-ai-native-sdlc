@@ -53,3 +53,19 @@ Check locally
 ~~~~~~~~~~~~~
 
 - Health endpoint: http://localhost:3000/health
+
+Frontend (Next.js)
+------------------
+
+The frontend lives in `services/frontend` and uses the Next.js App Router.
+
+Run with Docker Compose
+~~~~~~~~~~~~~~~~~~~~~~~
+
+- Start: `docker compose up --build`
+
+Check locally
+~~~~~~~~~~~~~
+
+- Frontend: http://localhost:3001
+- Backend: http://localhost:3000
