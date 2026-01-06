@@ -39,15 +39,10 @@ export class CsvController {
 
   constructor(private readonly csvService: CsvService) {}
 
-  @Get(':diagramId')
-  @ApiOkResponse({ type: CsvTypesResponse })
-  @ApiBadRequestResponse({ description: 'Invalid diagram id or generator output' })
-  @ApiNotFoundResponse({ description: 'Diagram not found' })
-  async list(@Param('diagramId') diagramId: string): Promise<CsvTypesResponse> {
-    return this.csvService.listTypes(diagramId);
-  }
-
-  @Get(':diagramId/archive')
+  // IMPORTANT: Keep this route *before* `GET :diagramId`.
+  // Otherwise a request to `/api/csv/<id>.zip` would be captured by the generic
+  // `:diagramId` handler.
+  @Get(':diagramId.zip')
   @ApiProduces('application/zip')
   @ApiOkResponse({
     description: 'ZIP archive containing all CSV files for the diagram',
@@ -55,7 +50,7 @@ export class CsvController {
   })
   @ApiBadRequestResponse({ description: 'Invalid diagram id or generator output' })
   @ApiNotFoundResponse({ description: 'Diagram not found' })
-  async archive(
+  async zip(
     @Param('diagramId') diagramId: string,
     @Res() res: Response,
   ): Promise<void> {
@@ -80,7 +75,6 @@ export class CsvController {
         (err as any)?.stack,
       );
 
-      // If headers already went out, just terminate the stream.
       if (!res.headersSent) {
         res.status(500);
       }
@@ -95,6 +89,14 @@ export class CsvController {
     }
 
     await archive.finalize();
+  }
+
+  @Get(':diagramId')
+  @ApiOkResponse({ type: CsvTypesResponse })
+  @ApiBadRequestResponse({ description: 'Invalid diagram id or generator output' })
+  @ApiNotFoundResponse({ description: 'Diagram not found' })
+  async list(@Param('diagramId') diagramId: string): Promise<CsvTypesResponse> {
+    return this.csvService.listTypes(diagramId);
   }
 
   @Get(':diagramId/:type')
