@@ -1,5 +1,7 @@
 import type { Response } from 'express';
-import archiver from 'archiver';
+// archiver is CommonJS; use require-import to avoid undefined default export at runtime.
+// eslint-disable-next-line @typescript-eslint/no-var-requires
+import archiver = require('archiver');
 import {
   Controller,
   Get,
