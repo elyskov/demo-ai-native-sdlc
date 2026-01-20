@@ -64,7 +64,7 @@ export class DiagramsCommandsService {
     state.objects.push(obj);
     await this.domainStore.save(diagramId, state);
 
-    // Mermaid placement: v1 uses the configured mapping + command parent to choose insertion parent.
+    // Mermaid placement: parent rules come from netbox-model.yaml; the command provides the parent.
     // We do not parse Mermaid; we insert deterministic blocks using insertion markers.
     const { mermaidId, block } = this.mermaid.renderEntityBlock(dto.entity, {
       id: obj.id,

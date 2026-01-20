@@ -47,13 +47,6 @@ export type NetboxToMermaidConfig = {
         label: string;
         shape?: string;
       };
-      placement?: {
-        parent?: Array<{ root?: string; entity?: string }>;
-      };
-      attributes?: {
-        node?: { shape?: string };
-        render?: string[];
-      };
     }
   >;
   connections?: Record<
