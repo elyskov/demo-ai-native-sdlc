@@ -1,6 +1,7 @@
 import { Injectable } from '@nestjs/common';
 
 import { MermaidStylesService } from '../../netbox-config/mermaid-styles.service';
+import { NetboxModelService } from '../../netbox-config/netbox-model.service';
 import { NetboxToMermaidService } from '../../netbox-config/netbox-to-mermaid.service';
 
 const INSERT_MARKER_PREFIX = '%% INSERT ';
@@ -8,6 +9,7 @@ const INSERT_MARKER_PREFIX = '%% INSERT ';
 @Injectable()
 export class MermaidGeneratorService {
   constructor(
+    private readonly modelService: NetboxModelService,
     private readonly mappingService: NetboxToMermaidService,
     private readonly stylesService: MermaidStylesService,
   ) {}
@@ -31,10 +33,16 @@ export class MermaidGeneratorService {
     mermaidId: string;
     block: string;
   } {
+    const model = this.modelService.get();
     const mapping = this.mappingService.get();
     const entityCfg = mapping.entities?.[entity];
     if (!entityCfg) {
       throw new Error(`No Mermaid mapping for entity '${entity}'`);
+    }
+
+    const modelEntity = model.entities?.[entity];
+    if (!modelEntity) {
+      throw new Error(`No NetBox model entry for entity '${entity}'`);
     }
 
     const indent = mapping.globals?.indentation ?? '  ';
@@ -51,7 +59,9 @@ export class MermaidGeneratorService {
       lines.push(anchorStart);
       lines.push(`subgraph ${mermaidId}[${label}]`);
 
-      const attrs = entityCfg.attributes?.render ?? [];
+      // Attributes are now sourced from netbox-model.yaml (single source of truth).
+      // Render only fields that are present in the object, but keep the model's field order.
+      const attrs = Object.keys(modelEntity.attributes ?? {});
       for (const field of attrs) {
         const value = object[field];
         if (value === undefined || value === null) continue;
