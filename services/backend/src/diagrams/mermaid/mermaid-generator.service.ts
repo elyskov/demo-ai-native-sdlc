@@ -54,6 +54,10 @@ export class MermaidGeneratorService {
     const anchorStart = this.anchorStart(mermaidId);
     const anchorEnd = this.anchorEnd(mermaidId);
 
+    // For now we style generated blocks using the default (light) theme.
+    // This keeps styling deterministic without parsing existing Mermaid content.
+    const theme: 'light' | 'dark' = 'light';
+
     if (entityCfg.mermaid.type === 'subgraph') {
       const lines: string[] = [];
       lines.push(anchorStart);
@@ -70,6 +74,7 @@ export class MermaidGeneratorService {
       }
 
       const attrsCfg = mapping.others?.attributes?.mermaid;
+      let attrMermaidIdUsed: string | null = null;
       if (attrsCfg && attrLines.length) {
         const attrMermaidId = this.applyTemplate(attrsCfg.id ?? 'attr_{{ object.mermaidId }}', {
           object: {
@@ -79,6 +84,8 @@ export class MermaidGeneratorService {
             entity,
           },
         });
+
+        attrMermaidIdUsed = attrMermaidId;
 
         const attrLabel = this.escapeQuotes(attrLines.join(nl));
         const template = attrsCfg.template ?? '{{ id }}@{ shape: comment, label: "{{ label }}" }';
@@ -98,17 +105,38 @@ export class MermaidGeneratorService {
 
       lines.push(`${indent}${INSERT_MARKER_PREFIX}${mermaidId}`);
       lines.push('end');
+
+      // Style entity and its attribute-node (if present). Keep these inside the anchored block
+      // so delete/remove operations cleanly remove associated style statements.
+      const entityStyle = this.resolveEntityStyle(theme, entity, object);
+      const entityStyleLine = this.renderStyleLine(mermaidId, entityStyle);
+      if (entityStyleLine) {
+        lines.push(entityStyleLine);
+      }
+
+      if (attrMermaidIdUsed) {
+        const attrStyle = this.resolveAttributeStyle(theme, entity);
+        const attrStyleLine = this.renderStyleLine(attrMermaidIdUsed, attrStyle);
+        if (attrStyleLine) {
+          lines.push(attrStyleLine);
+        }
+      }
+
       lines.push(anchorEnd);
       return { mermaidId, block: lines.join(nl) };
     }
 
     // Node (non-structural) support (minimal v1)
     const nodeLabel = this.escapeQuotes(label);
-    const lines = [
-      anchorStart,
-      `${mermaidId}["${nodeLabel}"]`,
-      anchorEnd,
-    ];
+    const lines: string[] = [anchorStart, `${mermaidId}["${nodeLabel}"]`];
+
+    const nodeStyle = this.resolveEntityStyle(theme, entity, object);
+    const nodeStyleLine = this.renderStyleLine(mermaidId, nodeStyle);
+    if (nodeStyleLine) {
+      lines.push(nodeStyleLine);
+    }
+
+    lines.push(anchorEnd);
     return { mermaidId, block: lines.join(nl) };
   }
 
@@ -288,6 +316,43 @@ export class MermaidGeneratorService {
       parts.push(`${mappedKey}:${v}`);
     }
 
+    return parts.length ? `style ${mermaidId} ${parts.join(',')}` : null;
+  }
+
+  private resolveEntityStyle(theme: 'light' | 'dark', entity: string, object: Record<string, any>): Record<string, string> {
+    const styles = this.stylesService.get();
+    const t = styles.themes?.[theme];
+    const base = (t?.entities?.[entity]?.style ?? {}) as Record<string, string>;
+
+    // Optional: status style overlay (e.g. Active/Planned) based on the object's status field.
+    const status = typeof object.status === 'string' ? object.status : null;
+    const statusStyle = status ? ((t?.statuses?.[status]?.style ?? {}) as Record<string, string>) : {};
+
+    return { ...base, ...statusStyle };
+  }
+
+  private resolveAttributeStyle(theme: 'light' | 'dark', entity: string): Record<string, string> {
+    const styles = this.stylesService.get();
+    const t = styles.themes?.[theme];
+
+    // Global attribute style (themes.*.entities.attribute.style)
+    const global = (t?.entities?.attribute?.style ?? {}) as Record<string, string>;
+
+    // Per-entity attribute overrides (themes.*.entities.<entity>.attributes)
+    const perEntity = (t?.entities?.[entity]?.attributes ?? {}) as Record<string, string>;
+
+    return { ...global, ...perEntity };
+  }
+
+  private renderStyleLine(mermaidId: string, style: Record<string, string> | undefined | null): string | null {
+    if (!style) return null;
+    const entries = Object.entries(style).filter(([, v]) => v !== undefined && v !== null && String(v).length);
+    if (!entries.length) return null;
+
+    const parts: string[] = [];
+    for (const [k, v] of entries) {
+      parts.push(`${k}:${v}`);
+    }
     return parts.length ? `style ${mermaidId} ${parts.join(',')}` : null;
   }
 

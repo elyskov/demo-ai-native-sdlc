@@ -86,7 +86,15 @@ export type MermaidStylesConfig = {
     string,
     {
       roots?: Record<string, { style?: Record<string, string> }>;
-      entities?: Record<string, { style?: Record<string, string> }>;
+      entities?: Record<
+        string,
+        {
+          style?: Record<string, string>;
+          // Attribute-node style overrides for attributes rendered under this entity.
+          // Example: themes.light.entities.region.attributes
+          attributes?: Record<string, string>;
+        }
+      >;
       statuses?: Record<string, { style?: Record<string, string> }>;
       visibility?: Record<string, { selector?: Record<string, unknown>; style?: Record<string, unknown> }>;
     }
