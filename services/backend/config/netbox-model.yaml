@@ -378,8 +378,6 @@ entities:
       allowed:
         - entity: site
           field: site
-      required: false
-      allowed:
         - entity: location
           field: location
         - entity: rack
