@@ -3,7 +3,7 @@ kind: mermaid-styles
 
 
 frontmatter:
-  title: "NetBox Infrastructure Example"
+  title: "{{ diagram.name }}"
   config:
     theme: base
     look: classic

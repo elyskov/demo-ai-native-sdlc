@@ -14,19 +14,19 @@ export class MermaidGeneratorService {
     private readonly stylesService: MermaidStylesService,
   ) {}
 
-  initialDiagram(theme: 'light' | 'dark' = 'light'): string {
+  initialDiagram(diagramName: string, theme: 'light' | 'dark' = 'light'): string {
     const mapping = this.mappingService.get();
     const styles = this.stylesService.get();
 
     const indent = mapping.globals?.indentation ?? '  ';
     const nl = mapping.globals?.line_separator ?? '\n';
 
-    const initLine = this.renderInitDirective(styles);
+    const frontmatter = this.renderFrontmatter(styles, diagramName);
 
     const definitions = this.renderRootSubgraph('definitions', indent, nl, theme);
     const infrastructure = this.renderInfrastructureRoot(indent, nl, theme);
 
-    return [initLine, 'flowchart TB', '', definitions, '', infrastructure, ''].join(nl);
+    return [frontmatter, 'flowchart TB', '', definitions, '', infrastructure, ''].join(nl);
   }
 
   renderEntityBlock(entity: string, object: { id: string; name?: string } & Record<string, any>): {
@@ -215,15 +215,66 @@ export class MermaidGeneratorService {
     return lines.join(nl);
   }
 
-  private renderInitDirective(styles: any): string {
-    const config = styles?.frontmatter?.config;
-    if (!config) return '';
+  private renderFrontmatter(styles: any, diagramName: string): string {
+    const fm = styles?.frontmatter;
+    if (!fm) return '';
 
-    const init: any = {};
-    if (config.theme) init.theme = config.theme;
-    if (config.themeVariables) init.themeVariables = config.themeVariables;
+    const titleTpl = typeof fm.title === 'string' ? fm.title : '';
+    const resolvedTitleRaw = titleTpl
+      ? this.applyTemplate(titleTpl, { diagram: { name: diagramName } })
+      : diagramName;
+    const resolvedTitle = resolvedTitleRaw?.trim?.() ? resolvedTitleRaw.trim() : diagramName;
 
-    return `%%{init: ${JSON.stringify(init)} }%%`;
+    const config = fm.config ?? {};
+
+    const lines: string[] = [];
+    lines.push('---');
+    lines.push(`title: ${this.yamlScalar(resolvedTitle)}`);
+    lines.push('config:');
+
+    // Keep stable, human-friendly key ordering.
+    if (config.theme !== undefined) {
+      lines.push(`  theme: ${this.yamlScalar(config.theme)}`);
+    }
+    if (config.look !== undefined) {
+      lines.push(`  look: ${this.yamlScalar(config.look)}`);
+    }
+
+    if (config.themeVariables && typeof config.themeVariables === 'object') {
+      lines.push('  themeVariables:');
+      for (const [k, v] of Object.entries(config.themeVariables)) {
+        lines.push(`    ${k}: ${this.yamlScalar(v)}`);
+      }
+    }
+
+    // Any other config keys (rare) are appended deterministically.
+    const extraKeys = Object.keys(config)
+      .filter((k) => k !== 'theme' && k !== 'look' && k !== 'themeVariables')
+      .sort();
+    for (const k of extraKeys) {
+      const v = (config as any)[k];
+      if (v === undefined) continue;
+      lines.push(`  ${k}: ${this.yamlScalar(v)}`);
+    }
+
+    lines.push('---');
+    return lines.join('\n');
+  }
+
+  private yamlScalar(value: unknown): string {
+    if (value === null) return 'null';
+    if (value === true) return 'true';
+    if (value === false) return 'false';
+    if (typeof value === 'number') return Number.isFinite(value) ? String(value) : 'null';
+    const s = String(value);
+
+    // Safe unquoted scalars for simple titles/values.
+    if (/^[0-9a-zA-Z _.-]+$/.test(s) && !/^(null|true|false)$/i.test(s)) {
+      return s;
+    }
+
+    // Quote everything else.
+    return JSON.stringify(s);
   }
 
   private renderRootStyle(theme: string, rootKey: string, mermaidId: string): string | null {
