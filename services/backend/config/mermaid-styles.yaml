@@ -1,0 +1,119 @@
+version: 1.0
+kind: mermaid-styles
+
+
+frontmatter:
+  title: "{{ diagram.name }}"
+  config:
+    theme: base
+    look: classic
+    themeVariables:
+      primaryColor: "#00ff00"
+
+
+themes:
+
+  light:
+
+    roots:
+      infrastructure:
+        style:
+          fill: "#ffffff"
+          color: "#555555"
+          stroke: "#000000"
+          stroke-width: "1px"
+          stroke-dasharray: "5 5"
+
+      definitions:
+        style:
+          fill: "#f8f8f8"
+          color: "#555555"
+          stroke: "#000000"
+          stroke-width: "1px"
+
+
+    entities:
+
+      region:
+        style:
+          fill: "#ffffff"
+          color: "#000000"
+          stroke: "#555555"
+          stroke-width: "1px"
+
+        attributes:
+          text-align: left
+
+
+      site:
+        style:
+          fill: "#dddddd"
+          color: "#000000"
+          stroke: "#333333"
+          stroke-width: "1px"
+
+
+      location:
+        style:
+          fill: "#eeeeee"
+          color: "#000000"
+          stroke: "#333333"
+          stroke-width: "1px"
+
+
+      rack:
+        style:
+          fill: "#ffffff"
+          color: "#000000"
+          stroke: "#333333"
+          stroke-width: "3px"
+
+
+      device:
+        style:
+          fill: "#ffeedc"
+          color: "#000000"
+          stroke: "#333333"
+          stroke-width: "1px"
+
+
+      interface:
+        style:
+          fill: "#eeddbc"
+          color: "#000000"
+          stroke: "#333333"
+          stroke-width: "1px"
+
+
+      attribute:
+        style:
+          text-align: left
+          font-size: "12px"
+          color: "#444444"
+
+
+    statuses:
+
+      Active:
+        style:
+          opacity: "1.0"
+
+      Planned:
+        style:
+          opacity: "0.5"
+          stroke-dasharray: "3 3"
+
+
+    visibility:
+
+      hide_connections:
+        selector:
+          kind: connection
+        style:
+          opacity: "0"
+
+      hide_attributes:
+        selector:
+          kind: attribute
+        style:
+          display: none
