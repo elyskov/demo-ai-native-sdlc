@@ -79,7 +79,10 @@ export class DiagramsService implements OnModuleInit {
       const id = this.generateId();
 
       const name = input.name.trim();
-      const content = input.content && input.content.trim().length ? input.content : this.mermaid.initialDiagram('light');
+      const content =
+        input.content && input.content.trim().length
+          ? input.content
+          : this.mermaid.initialDiagram(name, 'light');
 
       const filePath = this.diagramFilePath(id);
       await atomicWriteFile(filePath, content);
