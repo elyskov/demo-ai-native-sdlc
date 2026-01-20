@@ -1,0 +1,158 @@
+version: 1.0
+kind: netbox-mermaid-mapping
+
+globals:
+  indentation: "  "
+  line_separator: "\n"
+
+  anchors:
+    enabled: true
+    start: "%% BEGIN {{id}}"
+    end: "%% END {{id}}"
+
+
+roots:
+  infrastructure:
+    mermaid:
+      type: subgraph
+      id: infrastructure
+      label: "*Infrastructure*"
+
+  definitions:
+    mermaid:
+      type: subgraph
+      id: definitions
+      label: "*Definitions*"
+
+
+entities:
+
+  region:
+    mermaid:
+      kind: structural
+      type: subgraph
+      id: "region_{{ object.id }}"
+      label: "*{{ object.name }}*"
+
+    placement:
+      parent:
+        - root: infrastructure
+        - entity: region
+
+    attributes:
+      node:
+        shape: comment
+      render:
+        - name
+        - slug
+
+
+  site:
+    mermaid:
+      kind: structural
+      type: subgraph
+      id: "site_{{ object.id }}"
+      label: "*{{ object.name }}*"
+
+    placement:
+      parent:
+        - entity: region
+
+    attributes:
+      node:
+        shape: comment
+      render:
+        - name
+        - slug
+        - status
+
+
+  location:
+    mermaid:
+      kind: structural
+      type: subgraph
+      id: "location_{{ object.id }}"
+      label: "*{{ object.name }}*"
+
+    placement:
+      parent:
+        - entity: site
+
+    attributes:
+      node:
+        shape: comment
+      render:
+        - name
+        - slug
+        - status
+
+
+  rack:
+    mermaid:
+      kind: structural
+      type: subgraph
+      id: "rack_{{ object.id }}"
+      label: "*{{ object.name }}*"
+
+    placement:
+      parent:
+        - entity: location
+        - entity: site
+
+    attributes:
+      node:
+        shape: comment
+      render:
+        - name
+        - status
+        - width
+        - height
+        - starting_unit
+
+
+  device:
+    mermaid:
+      kind: structural
+      type: subgraph
+      id: "device_{{ object.id }}"
+      label: "*{{ object.name }}*"
+
+    placement:
+      parent:
+        - entity: rack
+
+    attributes:
+      node:
+        shape: comment
+      render:
+        - name
+        - device_role
+        - device_type
+        - status
+
+
+  interface:
+    mermaid:
+      kind: node
+      type: node
+      id: "if_{{ object.id }}"
+      label: "{{ object.name }}"
+      shape: rounded
+
+    placement:
+      parent:
+        - entity: device
+
+
+connections:
+
+  interface_link:
+    from: interface
+    to: interface
+
+    scope:
+      root: infrastructure
+      container: connections
+
+    mermaid:
+      template: "{{ from.id }} <--> {{ to.id }}"

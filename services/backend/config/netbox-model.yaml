@@ -1,0 +1,334 @@
+version: 1.0
+
+roots:
+  definitions:
+    description: "Logical definitions and catalogs"
+  infrastructure:
+    description: "Physical and logical infrastructure"
+
+entities:
+
+  region:
+    meta:
+      group: Organization
+      ui_group: Organization
+      api_prefix: dcim
+      object: regions
+
+    parent:
+      required: true
+      allowed:
+        - root: definitions
+
+    links: {}
+
+    attributes:
+      name:
+        required: true
+      slug:
+        required: true
+
+
+  site-group:
+    meta:
+      group: Organization
+      ui_group: Organization
+      api_prefix: dcim
+      object: site-groups
+
+    parent:
+      required: true
+      allowed:
+        - root: definitions
+
+    links: {}
+
+    attributes:
+      name:
+        required: true
+      slug:
+        required: true
+
+
+  site:
+    meta:
+      group: Organization
+      ui_group: Organization
+      api_prefix: dcim
+      object: sites
+
+    parent:
+      required: true
+      allowed:
+        - entity: region
+          field: region
+        - root: infrastructure
+
+    links:
+      tenant:
+        entity: tenant
+        field: tenant
+        required: false
+      group:
+        entity: site-group
+        field: group
+        required: false
+
+    attributes:
+      name:
+        required: true
+      slug:
+        required: true
+
+
+  location:
+    meta:
+      group: Organization
+      ui_group: Organization
+      api_prefix: dcim
+      object: locations
+
+    parent:
+      required: true
+      allowed:
+        - entity: site
+          field: site
+
+    links: {}
+
+    attributes:
+      name:
+        required: true
+      slug:
+        required: true
+
+
+  tenant-group:
+    meta:
+      group: Organization
+      ui_group: Organization
+      api_prefix: tenancy
+      object: tenant-groups
+
+    parent:
+      required: true
+      allowed:
+        - root: definitions
+
+    links: {}
+
+    attributes:
+      name:
+        required: true
+      slug:
+        required: true
+
+
+  tenant:
+    meta:
+      group: Organization
+      ui_group: Organization
+      api_prefix: tenancy
+      object: tenants
+
+    parent:
+      required: true
+      allowed:
+        - entity: tenant-group
+          field: group
+        - root: definitions
+
+    links: {}
+
+    attributes:
+      name:
+        required: true
+      slug:
+        required: true
+
+
+  rack-type:
+    meta:
+      group: Racks
+      ui_group: Inventory
+      api_prefix: dcim
+      object: rack-types
+
+    parent:
+      required: true
+      allowed:
+        - root: definitions
+
+    links:
+      manufacturer:
+        entity: manufacturer
+        field: manufacturer
+        required: true
+
+    attributes:
+      model:
+        required: true
+      width:
+        required: true
+      height:
+        required: true
+      starting_unit:
+        required: true
+
+
+  rack:
+    meta:
+      group: Racks
+      ui_group: Inventory
+      api_prefix: dcim
+      object: racks
+
+    parent:
+      required: true
+      allowed:
+        - entity: location
+          field: location
+        - entity: site
+          field: site
+
+    links:
+      tenant:
+        entity: tenant
+        field: tenant
+        required: false
+      rack_type:
+        entity: rack-type
+        field: rack_type
+        required: true
+
+    attributes:
+      name:
+        required: true
+
+
+  manufacturer:
+    meta:
+      group: Devices
+      ui_group: Inventory
+      api_prefix: dcim
+      object: manufacturers
+
+    parent:
+      required: true
+      allowed:
+        - root: definitions
+
+    links: {}
+
+    attributes:
+      name:
+        required: true
+      slug:
+        required: true
+
+
+  device-role:
+    meta:
+      group: Devices
+      ui_group: Inventory
+      api_prefix: dcim
+      object: device-roles
+
+    parent:
+      required: true
+      allowed:
+        - root: definitions
+
+    links: {}
+
+    attributes:
+      name:
+        required: true
+      slug:
+        required: true
+
+
+  platform:
+    meta:
+      group: Devices
+      ui_group: Inventory
+      api_prefix: dcim
+      object: platforms
+
+    parent:
+      required: true
+      allowed:
+        - root: definitions
+
+    links:
+      manufacturer:
+        entity: manufacturer
+        field: manufacturer
+        required: false
+
+    attributes:
+      name:
+        required: true
+      slug:
+        required: true
+
+
+  device-type:
+    meta:
+      group: Devices
+      ui_group: Inventory
+      api_prefix: dcim
+      object: device-types
+
+    parent:
+      required: true
+      allowed:
+        - root: definitions
+
+    links:
+      manufacturer:
+        entity: manufacturer
+        field: manufacturer
+        required: true
+
+    attributes:
+      model:
+        required: true
+
+
+  device:
+    meta:
+      group: Devices
+      ui_group: Inventory
+      api_prefix: dcim
+      object: devices
+
+    parent:
+      required: true
+      allowed:
+        - entity: rack
+          field: rack
+        - entity: site
+          field: site
+
+    links:
+      role:
+        entity: device-role
+        field: device_role
+        required: true
+      device_type:
+        entity: device-type
+        field: device_type
+        required: true
+      tenant:
+        entity: tenant
+        field: tenant
+        required: false
+      platform:
+        entity: platform
+        field: platform
+        required: false
+
+    attributes:
+      name:
+        required: true
