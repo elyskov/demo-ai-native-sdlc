@@ -58,6 +58,17 @@ export type NetboxToMermaidConfig = {
       mermaid?: { template?: string };
     }
   >;
+
+  others?: {
+    attributes?: {
+      mermaid?: {
+        kind?: 'node';
+        type?: 'comment';
+        id?: string;
+        template?: string;
+      };
+    };
+  };
 };
 
 export type MermaidStylesConfig = {

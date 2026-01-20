@@ -62,12 +62,38 @@ export class MermaidGeneratorService {
       // Attributes are now sourced from netbox-model.yaml (single source of truth).
       // Render only fields that are present in the object, but keep the model's field order.
       const attrs = Object.keys(modelEntity.attributes ?? {});
+      const attrLines: string[] = [];
       for (const field of attrs) {
         const value = object[field];
         if (value === undefined || value === null) continue;
-        const attrId = `attr_${mermaidId}_${field}`.replace(/[^0-9a-zA-Z_]/g, '_');
-        const attrLabel = `${field}: ${String(value)}`;
-        lines.push(`${indent}${attrId}["${this.escapeQuotes(attrLabel)}"]:::attribute`);
+        attrLines.push(`${field}: ${String(value)}`);
+      }
+
+      const attrsCfg = mapping.others?.attributes?.mermaid;
+      if (attrsCfg && attrLines.length) {
+        const attrMermaidId = this.applyTemplate(attrsCfg.id ?? 'attr_{{ object.mermaidId }}', {
+          object: {
+            mermaidId,
+            id: object.id,
+            name: object.name ?? '',
+            entity,
+          },
+        });
+
+        const attrLabel = this.escapeQuotes(attrLines.join(nl));
+        const template = attrsCfg.template ?? '{{ id }}@{ shape: comment, label: "{{ label }}" }';
+        const rendered = this.applyTemplate(template, {
+          id: attrMermaidId,
+          label: attrLabel,
+          object: {
+            mermaidId,
+            id: object.id,
+            name: object.name ?? '',
+            entity,
+          },
+        });
+
+        lines.push(this.indentBlock(rendered.trimEnd(), indent, nl));
       }
 
       lines.push(`${indent}${INSERT_MARKER_PREFIX}${mermaidId}`);
@@ -227,6 +253,13 @@ export class MermaidGeneratorService {
 
   private anchorStart(id: string): string {
     return `%% BEGIN ${id}`;
+  }
+
+  private indentBlock(block: string, indent: string, nl: string): string {
+    return block
+      .split(nl)
+      .map((line) => (line.length ? `${indent}${line}` : line))
+      .join(nl);
   }
 
   private anchorEnd(id: string): string {

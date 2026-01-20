@@ -88,3 +88,13 @@ connections:
 
     mermaid:
       template: "{{ from.id }} <--> {{ to.id }}"
+
+
+others:
+  attributes:
+    mermaid:
+      kind: node
+      type: comment
+      id: "attr_{{ object.mermaidId }}"
+      template: |
+        {{ id }}@{ shape: comment, label: "{{ label }}" }
