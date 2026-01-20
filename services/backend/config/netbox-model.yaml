@@ -18,7 +18,9 @@ entities:
     parent:
       required: true
       allowed:
-        - root: definitions
+        - entity: region
+          field: parent
+        - root: infrastructure
 
     links: {}
 
@@ -39,6 +41,8 @@ entities:
     parent:
       required: true
       allowed:
+        - entity: site-group
+          field: parent
         - root: definitions
 
     links: {}
@@ -69,7 +73,7 @@ entities:
         entity: tenant
         field: tenant
         required: false
-      group:
+      site-group:
         entity: site-group
         field: group
         required: false
@@ -78,6 +82,8 @@ entities:
       name:
         required: true
       slug:
+        required: true
+      status:
         required: true
 
 
@@ -91,15 +97,23 @@ entities:
     parent:
       required: true
       allowed:
+        - entity: location
+          field: parent
         - entity: site
           field: site
 
-    links: {}
+    links:
+      tenant:
+        entity: tenant
+        field: tenant
+        required: false
 
     attributes:
       name:
         required: true
       slug:
+        required: true
+      status:
         required: true
 
 
@@ -113,6 +127,8 @@ entities:
     parent:
       required: true
       allowed:
+        - entity: tenant-group
+          field: parent
         - root: definitions
 
     links: {}
@@ -157,20 +173,21 @@ entities:
     parent:
       required: true
       allowed:
-        - root: definitions
+        - entity: manufacturer
+          field: manufacturer
 
-    links:
-      manufacturer:
-        entity: manufacturer
-        field: manufacturer
-        required: true
+    links: {}
 
     attributes:
+      slug:
+        required: true
       model:
+        required: true
+      form_factor:
         required: true
       width:
         required: true
-      height:
+      u_height:
         required: true
       starting_unit:
         required: true
@@ -196,13 +213,25 @@ entities:
         entity: tenant
         field: tenant
         required: false
-      rack_type:
+      rack-type:
         entity: rack-type
         field: rack_type
-        required: true
+        required: false
+      rack-role:
+        entity: rack-role
+        field: role
+        required: false
 
     attributes:
       name:
+        required: true
+      status:
+        required: true
+      width:
+        required: true
+      u_height:
+        required: true
+      starting_unit:
         required: true
 
 
@@ -237,14 +266,22 @@ entities:
     parent:
       required: true
       allowed:
+        - entity: device-role
+          field: parent
         - root: definitions
 
-    links: {}
+    links:
+      config-template:
+        entity: config-template
+        field: config_template
+        required: false
 
     attributes:
       name:
         required: true
       slug:
+        required: true
+      color:
         required: true
 
 
@@ -258,12 +295,18 @@ entities:
     parent:
       required: true
       allowed:
+        - entity: platform
+          field: parent
         - root: definitions
 
     links:
       manufacturer:
         entity: manufacturer
         field: manufacturer
+        required: false
+      config-template:
+        entity: config-template
+        field: config_template
         required: false
 
     attributes:
@@ -290,9 +333,36 @@ entities:
         entity: manufacturer
         field: manufacturer
         required: true
+      platform:
+        entity: platform
+        field: default_platform
+        required: true
 
     attributes:
+      slug:
+        required: true
       model:
+        required: true
+      u_height:
+        required: true
+
+
+  virtual-chassis:
+    meta:
+      group: Devices
+      ui_group: Inventory
+      api_prefix: dcim
+      object: virtual-chassis
+
+    parent:
+      required: true
+      allowed:
+        - root: definitions
+
+    links: {}
+
+    attributes:
+      name:
         required: true
 
 
@@ -306,17 +376,21 @@ entities:
     parent:
       required: true
       allowed:
-        - entity: rack
-          field: rack
         - entity: site
           field: site
+      required: false
+      allowed:
+        - entity: location
+          field: location
+        - entity: rack
+          field: rack
 
     links:
-      role:
+      device-role:
         entity: device-role
-        field: device_role
+        field: role
         required: true
-      device_type:
+      device-type:
         entity: device-type
         field: device_type
         required: true
@@ -328,7 +402,39 @@ entities:
         entity: platform
         field: platform
         required: false
+      cluster:
+        entity: cluster
+        field: cluster
+        required: false
+      virtual-chassis:
+        entity: virtual-chassis
+        field: virtual_chassis
+        required: false
 
     attributes:
       name:
+        required: false
+      status:
+        required: true
+
+
+  interface:
+    meta:
+      group: Devices
+      ui_group: Inventory
+      api_prefix: dcim
+      object: interfaces
+
+    parent:
+      required: true
+      allowed:
+        - entity: device
+          field: device
+
+    links: {}
+
+    attributes:
+      name:
+        required: true
+      type:
         required: true
