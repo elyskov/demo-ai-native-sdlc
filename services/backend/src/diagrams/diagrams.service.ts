@@ -11,6 +11,8 @@ import * as path from 'node:path';
 
 import { atomicWriteFile, ensureDir, fileExists } from '../shared/fs-utils';
 
+import { MermaidGeneratorService } from './mermaid/mermaid-generator.service';
+
 export type DiagramMetadataEntry = {
   id: string;
   name: string;
@@ -41,6 +43,8 @@ export class DiagramsService implements OnModuleInit {
 
   private writeLock: Promise<void> = Promise.resolve();
 
+  constructor(private readonly mermaid: MermaidGeneratorService) {}
+
   async onModuleInit() {
     await ensureDir(this.diagramsDir);
     await this.loadIndex();
@@ -69,13 +73,16 @@ export class DiagramsService implements OnModuleInit {
 
   async create(input: {
     name: string;
-    content: string;
+    content?: string;
   }): Promise<DiagramEntity> {
     return this.withWriteLock(async () => {
       const id = this.generateId();
 
       const name = input.name.trim();
-      const content = input.content;
+      const content =
+        input.content && input.content.trim().length
+          ? input.content
+          : this.mermaid.initialDiagram(name, 'light');
 
       const filePath = this.diagramFilePath(id);
       await atomicWriteFile(filePath, content);
@@ -85,6 +92,26 @@ export class DiagramsService implements OnModuleInit {
 
       this.logger.log(`Created diagram '${id}'`);
       return { id, name, content };
+    });
+  }
+
+  async updateContent(id: string, content: string): Promise<DiagramEntity> {
+    return this.withWriteLock(async () => {
+      this.assertSafeId(id);
+
+      const meta = this.metadataById.get(id);
+      if (!meta) {
+        throw new NotFoundException(`Diagram '${id}' not found`);
+      }
+
+      const filePath = this.diagramFilePath(id);
+      if (!(await fileExists(filePath))) {
+        throw new NotFoundException(`Diagram '${id}' content not found`);
+      }
+
+      await atomicWriteFile(filePath, content);
+      this.logger.log(`Updated content for diagram '${id}'`);
+      return { id, name: meta.name, content };
     });
   }
 

@@ -1,5 +1,5 @@
-import { ApiProperty } from '@nestjs/swagger';
-import { IsNotEmpty, IsString, MaxLength } from 'class-validator';
+import { ApiProperty, ApiPropertyOptional } from '@nestjs/swagger';
+import { IsNotEmpty, IsOptional, IsString, MaxLength } from 'class-validator';
 
 export class CreateDiagramDto {
   @ApiProperty({ description: 'Human-friendly diagram name', example: 'Web App (prod)' })
@@ -8,11 +8,12 @@ export class CreateDiagramDto {
   @MaxLength(200)
   name!: string;
 
-  @ApiProperty({
-    description: 'Mermaid diagram content (text)',
+  @ApiPropertyOptional({
+    description:
+      'Mermaid diagram content (text). If omitted, backend initializes a deterministic base structure.',
     example: 'graph TD\n  A-->B',
   })
+  @IsOptional()
   @IsString()
-  @IsNotEmpty()
-  content!: string;
+  content?: string;
 }
