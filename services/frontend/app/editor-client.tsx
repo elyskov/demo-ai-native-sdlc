@@ -23,9 +23,11 @@ import {
   ContextMenuSubContent,
   ContextMenuSubTrigger,
   ContextMenuSeparator,
+  ContextMenuTrigger,
 } from '@/components/ui/context-menu'
 import {
   Popover,
+  PopoverAnchor,
   PopoverContent,
   PopoverTrigger,
 } from '@/components/ui/popover'
@@ -68,6 +70,7 @@ export function DiagramEditor({ diagram }: DiagramEditorProps) {
   const [addPopoverOpen, setAddPopoverOpen] = useState(false)
   const [movePopoverOpen, setMovePopoverOpen] = useState(false)
   const [selectedElement, setSelectedElement] = useState<EntityType | null>(null)
+  const [editPopoverPoint, setEditPopoverPoint] = useState<{ x: number; y: number } | null>(null)
   const [entityTypes, setEntityTypes] = useState<string[]>([])
   const [childElements, setChildElements] = useState<EntityType[]>([])
   const [attributes, setAttributes] = useState<EntityAttribute[]>([
@@ -177,7 +180,10 @@ export function DiagramEditor({ diagram }: DiagramEditorProps) {
   }
 
   const handleUpdateEntity = async () => {
-    if (!entityToDelete) return
+    if (!entityToDelete) {
+      setEditPopoverOpen(false)
+      return
+    }
 
     setLoading(true)
     try {
@@ -289,47 +295,104 @@ export function DiagramEditor({ diagram }: DiagramEditorProps) {
   }
 
   return (
-    <div className="flex flex-col h-screen bg-background">
-      {/* Header */}
-      <header className="border-b px-6 py-4 flex items-center justify-between">
-        <div className="flex items-center gap-4">
-          <Button
-            variant="ghost"
-            size="icon"
-            onClick={() => router.push('/')}
-          >
-            <ArrowLeft className="h-4 w-4" />
-            <span className="sr-only">Back</span>
-          </Button>
-          <div>
-            <h1 className="text-2xl font-bold">{diagram.name}</h1>
-            <p className="text-sm text-muted-foreground">{diagram.id}</p>
-          </div>
-        </div>
-      </header>
+    <div className="flex flex-col min-h-full bg-background">
 
       {/* Editor Content */}
       <div className="flex-1 overflow-auto">
-        <div className="p-6">
-          {/* Mermaid Display Area */}
-          <ContextMenu>
-            <div
-              ref={contextMenuRef}
-              className="bg-card border-2 border-dashed border-muted rounded-lg p-8 min-h-96 font-mono text-sm whitespace-pre-wrap break-words text-card-foreground select-text"
+        <div className="container max-w-4xl mx-auto py-8 px-4 min-h-[calc(100vh-120px)] flex flex-col">
+          <div className="flex items-center justify-between mb-6">
+            <h1 className="text-3xl font-bold">{diagram.name}</h1>
+            <Button onClick={() => router.push('/')}
+              className="inline-flex items-center gap-2"
             >
-              {diagram.content}
-            </div>
-            <ContextMenuContent>
-              <ContextMenuItem
-                onClick={() => {
-                  setSelectedElement({ entity: 'region', name: 'New Region' })
-                  setEditPopoverOpen(false)
-                  handleOpenAddPopover()
-                }}
-              >
-                <Plus className="mr-2 h-4 w-4" />
-                Add
-              </ContextMenuItem>
+              <ArrowLeft className="h-4 w-4" />
+              Back
+            </Button>
+          </div>
+          <div className="flex-1 flex items-center justify-center">
+            {/* Mermaid Display Area */}
+            <Popover open={editPopoverOpen} onOpenChange={setEditPopoverOpen}>
+              <div className="relative w-full h-[60vh]">
+                {editPopoverPoint && (
+                  <PopoverAnchor asChild>
+                    <span
+                      style={{
+                        position: 'absolute',
+                        left: editPopoverPoint.x,
+                        top: editPopoverPoint.y,
+                        width: 1,
+                        height: 1,
+                      }}
+                    />
+                  </PopoverAnchor>
+                )}
+                <ContextMenu>
+                  <ContextMenuTrigger asChild>
+                    <PopoverTrigger asChild>
+                      <div
+                        ref={contextMenuRef}
+                        onClick={(event) => {
+                          const rect = contextMenuRef.current?.getBoundingClientRect()
+                          if (rect) {
+                            const margin = 16
+                            const x = Math.min(Math.max(event.clientX - rect.left, margin), rect.width - margin)
+                            const y = Math.min(Math.max(event.clientY - rect.top, margin), rect.height - margin)
+                            setEditPopoverPoint({ x, y })
+                          }
+                          setSelectedElement({ entity: 'region', name: 'Selected Element' })
+                          setEditPopoverOpen(true)
+                        }}
+                        className="bg-card border-2 border-dashed border-muted rounded-lg p-8 h-full font-mono text-sm whitespace-pre-wrap break-words text-card-foreground select-text cursor-pointer w-full"
+                      >
+                        {diagram.content}
+                      </div>
+                    </PopoverTrigger>
+                  </ContextMenuTrigger>
+                  <ContextMenuContent>
+              <ContextMenuSub>
+                <ContextMenuSubTrigger>
+                  <Plus className="mr-2 h-4 w-4" />
+                  Add
+                </ContextMenuSubTrigger>
+                <ContextMenuSubContent>
+                  <ContextMenuItem
+                    onClick={() => {
+                      setSelectedElement({ entity: 'region', name: 'New Region' })
+                      setEditPopoverOpen(false)
+                      handleOpenAddPopover()
+                    }}
+                  >
+                    Region
+                  </ContextMenuItem>
+                  <ContextMenuItem
+                    onClick={() => {
+                      setSelectedElement({ entity: 'site', name: 'New Site' })
+                      setEditPopoverOpen(false)
+                      handleOpenAddPopover()
+                    }}
+                  >
+                    Site
+                  </ContextMenuItem>
+                  <ContextMenuItem
+                    onClick={() => {
+                      setSelectedElement({ entity: 'container', name: 'New Container' })
+                      setEditPopoverOpen(false)
+                      handleOpenAddPopover()
+                    }}
+                  >
+                    Container
+                  </ContextMenuItem>
+                  <ContextMenuItem
+                    onClick={() => {
+                      setSelectedElement({ entity: 'node', name: 'New Node' })
+                      setEditPopoverOpen(false)
+                      handleOpenAddPopover()
+                    }}
+                  >
+                    Deployment Node
+                  </ContextMenuItem>
+                </ContextMenuSubContent>
+              </ContextMenuSub>
 
               <ContextMenuSub>
                 <ContextMenuSubTrigger>
@@ -350,6 +413,10 @@ export function DiagramEditor({ diagram }: DiagramEditorProps) {
               <ContextMenuItem
                 onClick={() => {
                   setSelectedElement({ entity: 'site', name: 'Edit' })
+                  const rect = contextMenuRef.current?.getBoundingClientRect()
+                  if (rect) {
+                    setEditPopoverPoint({ x: rect.width / 2, y: rect.height / 2 })
+                  }
                   setEditPopoverOpen(true)
                 }}
               >
@@ -366,8 +433,75 @@ export function DiagramEditor({ diagram }: DiagramEditorProps) {
                 <Trash2 className="mr-2 h-4 w-4" />
                 Delete Selected
               </ContextMenuItem>
-            </ContextMenuContent>
-          </ContextMenu>
+                  </ContextMenuContent>
+                </ContextMenu>
+              </div>
+              <PopoverContent
+                className="w-80"
+                align="start"
+                sideOffset={12}
+                collisionPadding={16}
+                collisionBoundary={contextMenuRef.current ?? undefined}
+              >
+              <div className="grid gap-4">
+                <div className="space-y-2">
+                  <h4 className="font-medium leading-none">Edit Entity</h4>
+                  <p className="text-sm text-muted-foreground">
+                    Update entity attributes
+                  </p>
+                </div>
+
+                <div className="grid gap-3">
+                  <div className="grid gap-2">
+                    <Label>Attributes</Label>
+                    {attributes.map((attr, idx) => (
+                      <div key={idx} className="flex gap-2">
+                        <Input
+                          placeholder="Key"
+                          value={attr.key}
+                          onChange={(e) => {
+                            const newAttrs = [...attributes]
+                            newAttrs[idx].key = e.target.value
+                            setAttributes(newAttrs)
+                          }}
+                          disabled={loading}
+                        />
+                        <Input
+                          placeholder="Value"
+                          value={attr.value}
+                          onChange={(e) => {
+                            const newAttrs = [...attributes]
+                            newAttrs[idx].value = e.target.value
+                            setAttributes(newAttrs)
+                          }}
+                          disabled={loading}
+                        />
+                      </div>
+                    ))}
+                  </div>
+                </div>
+
+                <div className="flex gap-2 justify-end">
+                  <Button
+                    variant="outline"
+                    size="sm"
+                    onClick={() => setEditPopoverOpen(false)}
+                    disabled={loading}
+                  >
+                    Cancel
+                  </Button>
+                  <Button
+                    size="sm"
+                    onClick={handleUpdateEntity}
+                    disabled={loading}
+                  >
+                    {loading ? 'Updating...' : 'Update'}
+                  </Button>
+                </div>
+              </div>
+            </PopoverContent>
+            </Popover>
+          </div>
 
           {/* Instructions */}
           <p className="text-sm text-muted-foreground mt-4 italic">
@@ -476,68 +610,6 @@ export function DiagramEditor({ diagram }: DiagramEditorProps) {
         </PopoverContent>
       </Popover>
 
-      {/* Edit Entity Popover */}
-      <Popover open={editPopoverOpen} onOpenChange={setEditPopoverOpen}>
-        <PopoverContent className="w-80">
-          <div className="grid gap-4">
-            <div className="space-y-2">
-              <h4 className="font-medium leading-none">Edit Entity</h4>
-              <p className="text-sm text-muted-foreground">
-                Update entity attributes
-              </p>
-            </div>
-
-            <div className="grid gap-3">
-              <div className="grid gap-2">
-                <Label>Attributes</Label>
-                {attributes.map((attr, idx) => (
-                  <div key={idx} className="flex gap-2">
-                    <Input
-                      placeholder="Key"
-                      value={attr.key}
-                      onChange={(e) => {
-                        const newAttrs = [...attributes]
-                        newAttrs[idx].key = e.target.value
-                        setAttributes(newAttrs)
-                      }}
-                      disabled={loading}
-                    />
-                    <Input
-                      placeholder="Value"
-                      value={attr.value}
-                      onChange={(e) => {
-                        const newAttrs = [...attributes]
-                        newAttrs[idx].value = e.target.value
-                        setAttributes(newAttrs)
-                      }}
-                      disabled={loading}
-                    />
-                  </div>
-                ))}
-              </div>
-            </div>
-
-            <div className="flex gap-2 justify-end">
-              <Button
-                variant="outline"
-                size="sm"
-                onClick={() => setEditPopoverOpen(false)}
-                disabled={loading}
-              >
-                Cancel
-              </Button>
-              <Button
-                size="sm"
-                onClick={handleUpdateEntity}
-                disabled={loading}
-              >
-                {loading ? 'Updating...' : 'Update'}
-              </Button>
-            </div>
-          </div>
-        </PopoverContent>
-      </Popover>
-
       {/* Move Entity Popover */}
       <Popover open={movePopoverOpen} onOpenChange={setMovePopoverOpen}>
         <PopoverContent className="w-80">
@@ -610,6 +682,7 @@ export function DiagramEditor({ diagram }: DiagramEditorProps) {
           </AlertDialogFooter>
         </AlertDialogContent>
       </AlertDialog>
+
     </div>
   )
 }

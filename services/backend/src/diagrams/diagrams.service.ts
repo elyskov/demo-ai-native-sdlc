@@ -48,6 +48,56 @@ export class DiagramsService implements OnModuleInit {
   async onModuleInit() {
     await ensureDir(this.diagramsDir);
     await this.loadIndex();
+
+    // Seed sample diagrams if empty
+    if (this.metadataById.size === 0) {
+      await this.seedSampleDiagrams();
+    }
+  }
+
+  private async seedSampleDiagrams(): Promise<void> {
+    const samples = [
+      {
+        name: 'Sample Deployment 1',
+        content: `C4Deployment
+    title Sample Deployment Diagram
+    Deployment_Node(aws, "AWS Cloud") {
+      Deployment_Node(region, "us-east-1") {
+        Deployment_Node(vpc, "VPC") {
+          Container(backend, "Backend API", "Node.js")
+          Container(frontend, "Frontend", "Next.js")
+        }
+      }
+    }
+    Rel(frontend, backend, "HTTPS")`,
+      },
+      {
+        name: 'Sample Deployment 2',
+        content: `C4Deployment
+    title Example Infrastructure
+    Deployment_Node(onprem, "On-Premises") {
+      Deployment_Node(datacenter, "Data Center") {
+        Container(app, "Application", "Java")
+        Container(db, "Database", "PostgreSQL")
+      }
+    }
+    Rel(app, db, "SQL")`,
+      },
+    ];
+
+    for (const sample of samples) {
+      const id = this.generateId();
+      const content = sample.content;
+      const filePath = this.diagramFilePath(id);
+
+      await atomicWriteFile(filePath, content);
+      this.metadataById.set(id, { id, name: sample.name });
+
+      this.logger.log(`Seeded sample diagram '${id}': ${sample.name}`);
+    }
+
+    await this.persistIndex();
+    this.logger.log(`Seeded ${samples.length} sample diagrams`);
   }
 
   list(): DiagramMetadataEntry[] {
