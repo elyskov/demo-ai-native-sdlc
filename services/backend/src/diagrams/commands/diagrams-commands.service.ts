@@ -29,12 +29,24 @@ export class DiagramsCommandsService {
       return this.applyCreate(diagramId, diagram.name, diagram.content, dto);
     }
 
+    if (dto.command === 'update') {
+      return this.applyUpdate(diagramId, diagram.name, diagram.content, dto);
+    }
+
     if (dto.command === 'delete') {
       return this.applyDelete(diagramId, diagram.name, diagram.content, dto);
     }
 
     if (dto.command === 'move') {
       return this.applyMove(diagramId, diagram.name, diagram.content, dto);
+    }
+
+    if (dto.command === 'list-types') {
+      return this.applyListTypes();
+    }
+
+    if (dto.command === 'list-elements') {
+      return this.applyListElements(diagramId, dto);
     }
 
     throw new BadRequestException('Unsupported command');
@@ -216,5 +228,63 @@ export class DiagramsCommandsService {
     } catch (err) {
       throw new BadRequestException((err as any)?.message ?? 'Failed to resolve Mermaid id');
     }
+  }
+
+  // Update command: modify attributes of an existing entity (mock implementation)
+  private async applyUpdate(diagramId: string, diagramName: string, content: string, dto: DiagramCommandDto) {
+    if (!dto.id) {
+      throw new BadRequestException('Missing id for update');
+    }
+
+    const state = await this.domainStore.load(diagramId);
+    const obj = state.objects.find((o) => o.id === dto.id && o.entity === dto.entity);
+    if (!obj) {
+      throw new NotFoundException(`Object '${dto.entity}:${dto.id}' not found in diagram domain state`);
+    }
+
+    // Merge new attributes into existing object
+    const mergedAttrs = { ...obj.attributes, ...(dto.attributes || {}) };
+    this.validateAttributes(dto.entity, mergedAttrs);
+    obj.attributes = mergedAttrs;
+    await this.domainStore.save(diagramId, state);
+
+    this.logger.log(`Applied update to ${dto.entity} '${dto.id}' in diagram '${diagramId}'`);
+    return { id: diagramId, name: diagramName, content };
+  }
+
+  // List entity types: return available entity types from model (mock implementation)
+  private applyListTypes() {
+    const model = this.modelService.get();
+    const types = Object.keys(model.entities ?? {}).sort();
+    return { types };
+  }
+
+  // List elements: return child entities available under a given parent (mock implementation)
+  private async applyListElements(diagramId: string, dto: DiagramCommandDto) {
+    const parent = this.parseParent(dto);
+    if (!parent) {
+      throw new BadRequestException('Parent is required for list-elements');
+    }
+
+    const state = await this.domainStore.load(diagramId);
+    
+    // Find all objects matching the parent context
+    const elements = state.objects
+      .filter((obj) => {
+        if ('root' in parent && 'root' in obj.parent) {
+          return obj.parent.root === parent.root;
+        }
+        if ('entity' in parent && 'entity' in obj.parent) {
+          return obj.parent.entity === parent.entity && obj.parent.id === parent.id;
+        }
+        return false;
+      })
+      .map((obj) => ({
+        id: obj.id,
+        entity: obj.entity,
+        name: obj.attributes?.name ?? `${obj.entity}_${obj.id}`,
+      }));
+
+    return { elements };
   }
 }

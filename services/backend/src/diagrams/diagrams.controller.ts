@@ -5,6 +5,7 @@ import {
   Get,
   HttpCode,
   Param,
+  Patch,
   Post,
   Put,
 } from '@nestjs/common';
@@ -45,6 +46,22 @@ export class DiagramsController {
   @ApiBadRequestResponse({ description: 'Validation error' })
   async create(@Body() dto: CreateDiagramDto): Promise<Diagram> {
     return this.diagramsService.create(dto);
+  }
+
+  @Patch(':id')
+  @ApiOkResponse({ type: Diagram })
+  @ApiNotFoundResponse({ description: 'Diagram not found' })
+  @ApiBadRequestResponse({ description: 'Validation error' })
+  async update(
+    @Param('id') id: string,
+    @Body() dto: Partial<UpdateDiagramDto>,
+  ): Promise<Diagram> {
+    // Partial update: rename only (content remains unchanged)
+    const current = await this.diagramsService.get(id);
+    return this.diagramsService.replace(id, {
+      name: dto.name ?? current.name,
+      content: current.content,
+    });
   }
 
   @Put(':id')
