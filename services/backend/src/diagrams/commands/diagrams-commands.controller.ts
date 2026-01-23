@@ -6,7 +6,6 @@ import {
   ApiTags,
 } from '@nestjs/swagger';
 
-import { Diagram } from '../models/diagram.models';
 import { DiagramCommandDto } from './dto/diagram-command.dto';
 import { DiagramsCommandsService } from './diagrams-commands.service';
 
@@ -16,13 +15,13 @@ export class DiagramsCommandsController {
   constructor(private readonly commands: DiagramsCommandsService) {}
 
   @Post(':id/commands')
-  @ApiOkResponse({ type: Diagram })
+  @ApiOkResponse()
   @ApiNotFoundResponse({ description: 'Diagram not found' })
   @ApiBadRequestResponse({ description: 'Validation error' })
   async apply(
     @Param('id') id: string,
     @Body() dto: DiagramCommandDto,
-  ): Promise<Diagram> {
+  ): Promise<any> {
     return this.commands.apply(id, dto);
   }
 }

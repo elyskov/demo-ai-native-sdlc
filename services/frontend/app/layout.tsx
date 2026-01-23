@@ -1,7 +1,6 @@
 import type { Metadata } from 'next';
-import Link from 'next/link';
-
 import './globals.css';
+import { ThemeToggle } from './theme-toggle';
 
 export const metadata: Metadata = {
   title: 'demo-ai-native-sdlc',
@@ -15,16 +14,11 @@ export default function RootLayout({
 }>) {
   return (
     <html lang="en">
-      <body>
-        <header style={{ borderBottom: '1px solid #ddd' }}>
-          <nav
-            aria-label="Primary"
-            style={{ maxWidth: 960, margin: '0 auto', padding: 16 }}
-          >
-            <Link href="/">Diagrams</Link>
-          </nav>
-        </header>
-        <main>{children}</main>
+      <body className="min-h-screen flex flex-col">
+        <main className="flex-1">{children}</main>
+        <footer className="py-6 flex justify-center">
+          <ThemeToggle />
+        </footer>
       </body>
     </html>
   );

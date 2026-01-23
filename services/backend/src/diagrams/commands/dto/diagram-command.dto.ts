@@ -33,18 +33,18 @@ export class DiagramCommandDto {
   @ApiProperty({
     description: 'Domain command name',
     example: 'create',
-    enum: ['create', 'delete', 'move'],
+    enum: ['create', 'update', 'delete', 'move', 'list-types', 'list-elements'],
   })
   @IsString()
-  @IsIn(['create', 'delete', 'move'])
-  command!: 'create' | 'delete' | 'move';
+  @IsIn(['create', 'update', 'delete', 'move', 'list-types', 'list-elements'])
+  command!: 'create' | 'update' | 'delete' | 'move' | 'list-types' | 'list-elements';
 
   @ApiProperty({ description: 'Entity type', example: 'site' })
   @IsString()
   @IsNotEmpty()
   entity!: string;
 
-  @ApiPropertyOptional({ description: 'Target object id (required for delete/move)', example: '12' })
+  @ApiPropertyOptional({ description: 'Target object id (required for update/delete/move)', example: '12' })
   @IsOptional()
   @IsString()
   @IsNotEmpty()
