@@ -30,6 +30,7 @@ import {
   DropdownMenuItem,
   DropdownMenuTrigger,
 } from '@/components/ui/dropdown-menu';
+import { ScrollArea } from '@/components/ui/scroll-area';
 import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
 
@@ -139,7 +140,7 @@ export function DiagramsList({ diagrams }: DiagramsListProps) {
   };
 
   return (
-    <div className="container max-w-4xl mx-auto py-8 px-4">
+    <div className="container max-w-4xl mx-auto py-8 px-4 min-h-[calc(100vh-120px)] flex flex-col">
       <div className="flex items-center justify-between mb-6">
         <h1 className="text-3xl font-bold">Diagrams</h1>
 
@@ -186,50 +187,54 @@ export function DiagramsList({ diagrams }: DiagramsListProps) {
         </Dialog>
       </div>
 
-      {diagrams.length === 0 ? (
-        <div className="text-center py-12 text-muted-foreground">
-          <p>No diagrams yet. Create your first diagram to get started.</p>
-        </div>
-      ) : (
-        <div className="border rounded-lg divide-y">
-          {diagrams.map((diagram) => (
-            <div
-              key={diagram.id}
-              className="flex items-center justify-between p-4 hover:bg-accent/50 transition-colors"
-            >
-              <button
-                onClick={() => router.push(`/editor/${diagram.id}`)}
-                className="flex-1 text-left font-medium hover:underline"
-              >
-                {diagram.name}
-              </button>
-
-              <DropdownMenu>
-                <DropdownMenuTrigger asChild>
-                  <Button variant="ghost" size="icon">
-                    <MoreVertical className="h-4 w-4" />
-                    <span className="sr-only">Actions</span>
-                  </Button>
-                </DropdownMenuTrigger>
-                <DropdownMenuContent align="end">
-                  <DropdownMenuItem onClick={() => router.push(`/editor/${diagram.id}`)}>
-                    Open
-                  </DropdownMenuItem>
-                  <DropdownMenuItem onClick={() => openRenameDialog(diagram)}>
-                    Rename
-                  </DropdownMenuItem>
-                  <DropdownMenuItem
-                    onClick={() => openDeleteDialog(diagram)}
-                    className="text-destructive"
-                  >
-                    Delete
-                  </DropdownMenuItem>
-                </DropdownMenuContent>
-              </DropdownMenu>
+      <div className="flex-1 flex items-center justify-center">
+        <ScrollArea className="h-[60vh] w-full">
+          {diagrams.length === 0 ? (
+            <div className="text-center py-12 text-muted-foreground">
+              <p>No diagrams yet. Create your first diagram to get started.</p>
             </div>
-          ))}
-        </div>
-      )}
+          ) : (
+            <div className="border rounded-lg divide-y">
+              {diagrams.map((diagram) => (
+                <div
+                  key={diagram.id}
+                  className="flex items-center justify-between p-4 hover:bg-accent/50 transition-colors"
+                >
+                  <button
+                    onClick={() => router.push(`/editor/${diagram.id}`)}
+                    className="flex-1 text-left font-medium hover:underline"
+                  >
+                    {diagram.name}
+                  </button>
+
+                  <DropdownMenu>
+                    <DropdownMenuTrigger asChild>
+                      <Button variant="ghost" size="icon">
+                        <MoreVertical className="h-4 w-4" />
+                        <span className="sr-only">Actions</span>
+                      </Button>
+                    </DropdownMenuTrigger>
+                    <DropdownMenuContent align="end">
+                      <DropdownMenuItem onClick={() => router.push(`/editor/${diagram.id}`)}>
+                        Open
+                      </DropdownMenuItem>
+                      <DropdownMenuItem onClick={() => openRenameDialog(diagram)}>
+                        Rename
+                      </DropdownMenuItem>
+                      <DropdownMenuItem
+                        onClick={() => openDeleteDialog(diagram)}
+                        className="text-destructive"
+                      >
+                        Delete
+                      </DropdownMenuItem>
+                    </DropdownMenuContent>
+                  </DropdownMenu>
+                </div>
+              ))}
+            </div>
+          )}
+        </ScrollArea>
+      </div>
 
       {/* Rename Dialog */}
       <Dialog open={renameDialogOpen} onOpenChange={setRenameDialogOpen}>
