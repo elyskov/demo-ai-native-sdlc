@@ -82,3 +82,8 @@ Enforcement
 
 Treat this file as the canonical source of rules for Copilot-assisted development and for humans following Copilot suggestions. If a suggested change violates these rules, prefer producing an alternative that adheres to them. When in doubt, create a small Issue to discuss the proposed deviation and include the Copilot prompt that produced it.
 Updates to these instructions should be tracked through normal PR workflows and referenced in the project's `README.md` when significant.
+
+GitHub Repository
+-----------
+
+Use this reposotory as a code source and issue tracker: https://github.com/elyskov/demo-ai-native-sdlc
