@@ -1,8 +1,8 @@
 "use client"
 
-import { useState, useRef } from 'react'
+import { useRef, useState } from 'react'
 import { useRouter } from 'next/navigation'
-import { ArrowLeft, Edit2, Plus, Trash2, Move } from 'lucide-react'
+import { ArrowLeft, Edit2, Plus, Trash2, Move, ZoomIn, ZoomOut, RotateCcw } from 'lucide-react'
 
 import { Button } from '@/components/ui/button'
 import {
@@ -33,6 +33,7 @@ import {
 } from '@/components/ui/popover'
 import { Input } from '@/components/ui/input'
 import { Label } from '@/components/ui/label'
+import { MermaidViewer, type MermaidViewerHandle } from '@/components/mermaid-viewer'
 
 type Diagram = {
   id: string
@@ -64,6 +65,7 @@ const FIXED_CONTEXT = {
 export function DiagramEditor({ diagram }: DiagramEditorProps) {
   const router = useRouter()
   const contextMenuRef = useRef<HTMLDivElement>(null)
+  const mermaidViewerRef = useRef<MermaidViewerHandle>(null)
   const [deleteDialogOpen, setDeleteDialogOpen] = useState(false)
   const [entityToDelete, setEntityToDelete] = useState<string | null>(null)
   const [editPopoverOpen, setEditPopoverOpen] = useState(false)
@@ -313,6 +315,44 @@ export function DiagramEditor({ diagram }: DiagramEditorProps) {
             {/* Mermaid Display Area */}
             <Popover open={editPopoverOpen} onOpenChange={setEditPopoverOpen}>
               <div className="relative w-full h-[60vh]">
+                <div className="absolute right-3 top-3 z-20 flex items-center gap-2">
+                  <Button
+                    variant="secondary"
+                    size="icon"
+                    aria-label="Reset view"
+                    onClick={(e) => {
+                      e.stopPropagation()
+                      mermaidViewerRef.current?.resetView()
+                    }}
+                    onPointerDown={(e) => e.stopPropagation()}
+                  >
+                    <RotateCcw className="h-4 w-4" />
+                  </Button>
+                  <Button
+                    variant="secondary"
+                    size="icon"
+                    aria-label="Zoom out"
+                    onClick={(e) => {
+                      e.stopPropagation()
+                      mermaidViewerRef.current?.zoomOut()
+                    }}
+                    onPointerDown={(e) => e.stopPropagation()}
+                  >
+                    <ZoomOut className="h-4 w-4" />
+                  </Button>
+                  <Button
+                    variant="secondary"
+                    size="icon"
+                    aria-label="Zoom in"
+                    onClick={(e) => {
+                      e.stopPropagation()
+                      mermaidViewerRef.current?.zoomIn()
+                    }}
+                    onPointerDown={(e) => e.stopPropagation()}
+                  >
+                    <ZoomIn className="h-4 w-4" />
+                  </Button>
+                </div>
                 {editPopoverPoint && (
                   <PopoverAnchor asChild>
                     <span
@@ -342,9 +382,15 @@ export function DiagramEditor({ diagram }: DiagramEditorProps) {
                           setSelectedElement({ entity: 'region', name: 'Selected Element' })
                           setEditPopoverOpen(true)
                         }}
-                        className="bg-card border-2 border-dashed border-muted rounded-lg p-8 h-full font-mono text-sm whitespace-pre-wrap break-words text-card-foreground select-text cursor-pointer w-full"
+                        className="bg-card border-2 border-border rounded-lg p-2 h-full text-card-foreground select-text cursor-pointer w-full overflow-hidden"
                       >
-                        {diagram.content}
+                        <MermaidViewer
+                          ref={mermaidViewerRef}
+                          code={diagram.content}
+                          className="h-full w-full"
+                          fallbackClassName="h-full w-full overflow-auto p-4 font-mono text-sm whitespace-pre-wrap break-words"
+                          ariaLabel="Diagram preview"
+                        />
                       </div>
                     </PopoverTrigger>
                   </ContextMenuTrigger>
