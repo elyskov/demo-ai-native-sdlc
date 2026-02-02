@@ -1,6 +1,6 @@
 "use client"
 
-import { useRef, useState } from 'react'
+import { useEffect, useMemo, useRef, useState } from 'react'
 import { useRouter } from 'next/navigation'
 import { ArrowLeft, Edit2, Plus, Trash2, Move, ZoomIn, ZoomOut, RotateCcw } from 'lucide-react'
 
@@ -29,11 +29,11 @@ import {
   Popover,
   PopoverAnchor,
   PopoverContent,
-  PopoverTrigger,
 } from '@/components/ui/popover'
 import { Input } from '@/components/ui/input'
 import { Label } from '@/components/ui/label'
 import { MermaidViewer, type MermaidViewerHandle } from '@/components/mermaid-viewer'
+import { parseMermaidDomainRef } from '@/lib/mermaid-id'
 
 type Diagram = {
   id: string
@@ -56,8 +56,31 @@ type EntityAttribute = {
   value: string
 }
 
+type SelectedDomainRef = {
+  mermaidId: string
+  entity: string
+  id: string
+}
+
+type GetElementResponse = {
+  entity: string
+  id: string
+  attributes: Record<string, any>
+  parent?: any
+  attributeOrder?: string[]
+}
+
+type EntityTypeDetails = {
+  attributes: string[]
+  requiredAttributes: string[]
+}
+
+type CreateParentRef =
+  | { root: 'definitions' | 'infrastructure' }
+  | { entity: string; id: string }
+
 // Fixed infrastructure root context for all operations
-const FIXED_CONTEXT = {
+const FIXED_CONTEXT: { entity: string; parent: CreateParentRef } = {
   entity: 'infrastructure',
   parent: { root: 'infrastructure' },
 }
@@ -66,89 +89,325 @@ export function DiagramEditor({ diagram }: DiagramEditorProps) {
   const router = useRouter()
   const contextMenuRef = useRef<HTMLDivElement>(null)
   const mermaidViewerRef = useRef<MermaidViewerHandle>(null)
+  const slugTouchedRef = useRef(false)
+  const slugAutoRef = useRef('')
   const [deleteDialogOpen, setDeleteDialogOpen] = useState(false)
-  const [entityToDelete, setEntityToDelete] = useState<string | null>(null)
   const [editPopoverOpen, setEditPopoverOpen] = useState(false)
   const [addPopoverOpen, setAddPopoverOpen] = useState(false)
-  const [movePopoverOpen, setMovePopoverOpen] = useState(false)
-  const [selectedElement, setSelectedElement] = useState<EntityType | null>(null)
+  const [selectedElement, setSelectedElement] = useState<SelectedDomainRef | null>(null)
+  const selectedElementRef = useRef<SelectedDomainRef | null>(null)
+  const [createEntityType, setCreateEntityType] = useState<string>('')
+  const [addPopoverPoint, setAddPopoverPoint] = useState<{ x: number; y: number } | null>(null)
   const [editPopoverPoint, setEditPopoverPoint] = useState<{ x: number; y: number } | null>(null)
   const [entityTypes, setEntityTypes] = useState<string[]>([])
+  const [entityTypeDetails, setEntityTypeDetails] = useState<Record<string, EntityTypeDetails>>({})
   const [childElements, setChildElements] = useState<EntityType[]>([])
+  const [createParent, setCreateParent] = useState<CreateParentRef>(FIXED_CONTEXT.parent)
   const [attributes, setAttributes] = useState<EntityAttribute[]>([
     { key: 'name', value: '' },
   ])
-  const [targetElement, setTargetElement] = useState<string>('')
   const [loading, setLoading] = useState(false)
+  const [errorMessage, setErrorMessage] = useState<string | null>(null)
+  const [addErrorMessage, setAddErrorMessage] = useState<string | null>(null)
 
-  // Load entity types when add popover opens
-  const handleOpenAddPopover = async () => {
-    setAddPopoverOpen(true)
-    setLoading(true)
+  const typesLoadedRef = useRef(false)
+  const moveTargetsLoadedRef = useRef(false)
+
+  useEffect(() => {
+    selectedElementRef.current = selectedElement
+  }, [selectedElement])
+
+  const moveTargets = useMemo(() => {
+    // Add the fixed root as a convenient move target.
+    return [
+      { id: 'infrastructure', entity: 'root', name: 'Infrastructure (root)' },
+      ...childElements,
+    ]
+  }, [childElements])
+
+  const setPointFromClient = (clientX: number, clientY: number) => {
+    const rect = contextMenuRef.current?.getBoundingClientRect()
+    if (!rect) return
+    const margin = 16
+    const x = Math.min(Math.max(clientX - rect.left, margin), rect.width - margin)
+    const y = Math.min(Math.max(clientY - rect.top, margin), rect.height - margin)
+    setEditPopoverPoint({ x, y })
+  }
+
+  const preloadEntityTypes = async () => {
+    if (typesLoadedRef.current) return
+    typesLoadedRef.current = true
+
     try {
-      const res = await fetch(
-        `/api/diagrams/${diagram.id}/commands`,
-        {
-          method: 'POST',
-          headers: { 'Content-Type': 'application/json' },
-          body: JSON.stringify({
-            command: 'list-types',
-            entity: FIXED_CONTEXT.entity,
-            parent: FIXED_CONTEXT.parent,
-          }),
-        }
-      )
+      const res = await fetch(`/api/diagrams/${diagram.id}/commands`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          command: 'list-types',
+          entity: FIXED_CONTEXT.entity,
+          parent: FIXED_CONTEXT.parent,
+        }),
+      })
 
-      if (res.ok) {
-        const data = (await res.json()) as { types: string[] }
-        setEntityTypes(data.types)
+      if (!res.ok) {
+        throw new Error(`Failed to load entity types (${res.status})`)
+      }
+
+      const data = (await res.json()) as { types: string[]; details?: Record<string, EntityTypeDetails> }
+      setEntityTypes(data.types)
+      if (data.details && typeof data.details === 'object') {
+        setEntityTypeDetails(data.details)
       }
     } catch (error) {
       console.error('Failed to load entity types:', error)
-    } finally {
-      setLoading(false)
+      setErrorMessage('Failed to load entity types')
     }
   }
 
-  // Load child elements when move popover opens
-  const handleOpenMovePopover = async () => {
-    setMovePopoverOpen(true)
-    setLoading(true)
-    try {
-      const res = await fetch(
-        `/api/diagrams/${diagram.id}/commands`,
-        {
-          method: 'POST',
-          headers: { 'Content-Type': 'application/json' },
-          body: JSON.stringify({
-            command: 'list-elements',
-            entity: FIXED_CONTEXT.entity,
-            parent: FIXED_CONTEXT.parent,
-          }),
-        }
-      )
+  const ensureAttributesForEntityType = (entityType: string, current: EntityAttribute[]) => {
+    const details = entityTypeDetails[entityType]
+    if (!details) return current
 
-      if (res.ok) {
-        const data = (await res.json()) as { elements: EntityType[] }
-        setChildElements(data.elements)
+    const byKey = new Map<string, string>()
+    for (const { key, value } of current) {
+      const k = key.trim()
+      if (!k) continue
+      byKey.set(k, value)
+    }
+
+    const orderedKeys = Array.from(new Set([...(details.attributes ?? []), ...(details.requiredAttributes ?? [])]))
+    const next: EntityAttribute[] = []
+
+    for (const key of orderedKeys) {
+      if (details.requiredAttributes.includes(key) || byKey.has(key)) {
+        next.push({ key, value: byKey.get(key) ?? '' })
+        byKey.delete(key)
       }
+    }
+
+    for (const [key, value] of byKey.entries()) {
+      next.push({ key, value })
+    }
+
+    return next.length ? next : current
+  }
+
+  const slugify = (value: string) => {
+    return value
+      .trim()
+      .toLowerCase()
+      .replace(/[^a-z0-9]+/g, '-')
+      .replace(/^-+|-+$/g, '')
+  }
+
+  const parseApiErrorMessage = async (res: Response) => {
+    try {
+      const data = await res.json()
+      const msg = (data as any)?.message
+      if (Array.isArray(msg)) return msg.join('\n')
+      if (typeof msg === 'string') return msg
+    } catch {
+      // ignore
+    }
+    return `Request failed (${res.status})`
+  }
+
+  const getAttributeValue = (list: EntityAttribute[], key: string) => {
+    const found = list.find((a) => a.key.trim() === key)
+    return found?.value ?? ''
+  }
+
+  const applyAttributeUpdates = (
+    entityType: string,
+    updates: Record<string, string>,
+  ) => {
+    setAttributes((current) => {
+      const next = current.map((a) => {
+        const k = a.key.trim()
+        if (!k) return a
+        if (Object.prototype.hasOwnProperty.call(updates, k)) {
+          return { ...a, value: updates[k] }
+        }
+        return a
+      })
+
+      for (const [k, v] of Object.entries(updates)) {
+        if (!next.some((a) => a.key.trim() === k)) {
+          next.push({ key: k, value: v })
+        }
+      }
+
+      return ensureAttributesForEntityType(entityType, next)
+    })
+  }
+
+  const handleNameValueChange = (entityType: string, nextName: string) => {
+    const updates: Record<string, string> = { name: nextName }
+
+    const details = entityTypeDetails[entityType]
+    const hasSlugField = Boolean(
+      details?.attributes?.includes('slug') ||
+      details?.requiredAttributes?.includes('slug') ||
+      attributes.some((a) => a.key.trim() === 'slug')
+    )
+
+    if (!slugTouchedRef.current && hasSlugField) {
+      const nextSlug = slugify(nextName)
+      slugAutoRef.current = nextSlug
+      updates.slug = nextSlug
+    }
+
+    applyAttributeUpdates(entityType, updates)
+  }
+
+  const handleSlugValueChange = (entityType: string, nextSlug: string) => {
+    slugTouchedRef.current = true
+    slugAutoRef.current = ''
+    applyAttributeUpdates(entityType, { slug: nextSlug })
+  }
+
+  const preloadMoveTargets = async () => {
+    if (moveTargetsLoadedRef.current) return
+    moveTargetsLoadedRef.current = true
+
+    try {
+      const res = await fetch(`/api/diagrams/${diagram.id}/commands`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          command: 'list-elements',
+          entity: FIXED_CONTEXT.entity,
+          parent: FIXED_CONTEXT.parent,
+        }),
+      })
+
+      if (!res.ok) {
+        throw new Error(`Failed to load elements (${res.status})`)
+      }
+
+      const data = (await res.json()) as { elements: EntityType[] }
+      setChildElements(data.elements)
     } catch (error) {
       console.error('Failed to load elements:', error)
-    } finally {
-      setLoading(false)
+      setErrorMessage('Failed to load move targets')
     }
+  }
+
+  useEffect(() => {
+    // Prefill context menu data so submenus are ready when opened.
+    void preloadEntityTypes()
+    void preloadMoveTargets()
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [diagram.id])
+
+  const loadSelectedElementContext = async (ref: SelectedDomainRef) => {
+    if (ref.entity === 'root') {
+      // Default diagram roots are not stored as domain objects.
+      setAttributes([])
+      return
+    }
+
+    try {
+      const res = await fetch(`/api/diagrams/${diagram.id}/commands`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          command: 'get-element',
+          entity: ref.entity,
+          id: ref.id,
+          parent: FIXED_CONTEXT.parent,
+        }),
+      })
+
+      if (!res.ok) {
+        throw new Error(`Failed to load element (${res.status})`)
+      }
+
+      const data = (await res.json()) as GetElementResponse
+      const order = Array.isArray(data.attributeOrder) ? data.attributeOrder : Object.keys(data.attributes ?? {}).sort()
+      const next = order.map((key) => ({ key, value: data.attributes?.[key] == null ? '' : String(data.attributes[key]) }))
+      const ensured = ensureAttributesForEntityType(ref.entity, next.length ? next : [{ key: 'name', value: '' }])
+
+      // Determine whether slug should follow name automatically.
+      const currentName = String(getAttributeValue(ensured, 'name') ?? '')
+      const currentSlug = String(getAttributeValue(ensured, 'slug') ?? '')
+      const auto = slugify(currentName)
+      slugAutoRef.current = auto
+      slugTouchedRef.current = Boolean(currentSlug && currentSlug !== auto)
+
+      setAttributes(ensured)
+    } catch (error) {
+      console.error('Failed to load selected element context:', error)
+      setErrorMessage('Failed to load selected element')
+      // Keep previous attribute inputs if fetch fails.
+    }
+  }
+
+  const openAddPopoverWithType = async (entityType: string) => {
+    setErrorMessage(null)
+    setAddErrorMessage(null)
+    setCreateEntityType(entityType)
+    slugTouchedRef.current = false
+    slugAutoRef.current = ''
+
+    // Use current selection as parent when available.
+    const current = selectedElementRef.current
+    if (current) {
+      if (current.entity === 'root') {
+        const root = current.id === 'definitions' ? 'definitions' : 'infrastructure'
+        setCreateParent({ root })
+      } else {
+        setCreateParent({ entity: current.entity, id: current.id })
+      }
+    } else {
+      setCreateParent(FIXED_CONTEXT.parent)
+    }
+
+    setAttributes(ensureAttributesForEntityType(entityType, [{ key: 'name', value: '' }]))
+
+    // Anchor the "Add" popover near the diagram area (Popover needs an anchor/trigger).
+    const rect = contextMenuRef.current?.getBoundingClientRect()
+    if (rect) {
+      setAddPopoverPoint({ x: rect.left + rect.width / 2, y: rect.top + rect.height / 2 })
+    } else {
+      setAddPopoverPoint({ x: window.innerWidth / 2, y: window.innerHeight / 2 })
+    }
+
+    // IMPORTANT:
+    // This function is called from a Radix ContextMenuItem handler.
+    // Opening a Popover in the same pointer interaction can cause it to instantly close
+    // (the click is interpreted as "outside"), and can briefly position at (0,0) before
+    // the anchor is mounted.
+    // Defer to the next tick so the context menu closes first and the anchor is present.
+    setAddPopoverOpen(false)
+    window.setTimeout(() => setAddPopoverOpen(true), 0)
+
+    // Ensure types are loaded (best-effort, but don't block UI opening).
+    void preloadEntityTypes()
   }
 
   const handleCreateEntity = async () => {
-    if (!selectedElement) return
+    if (!createEntityType) return
 
     setLoading(true)
+    setAddErrorMessage(null)
     try {
       const attrs: Record<string, string> = {}
       for (const { key, value } of attributes) {
-        if (value.trim()) {
-          attrs[key] = value.trim()
+        const k = key.trim()
+        const v = value.trim()
+        if (k && v) {
+          attrs[k] = v
         }
+      }
+
+      const required = new Set(entityTypeDetails[createEntityType]?.requiredAttributes ?? [])
+      if (required.has('slug') && !attrs.slug && typeof attrs.name === 'string' && attrs.name.trim()) {
+        const s = slugify(attrs.name)
+        if (s) attrs.slug = s
+      }
+      if (required.has('status') && !attrs.status) {
+        attrs.status = 'active'
       }
 
       const res = await fetch(
@@ -158,31 +417,34 @@ export function DiagramEditor({ diagram }: DiagramEditorProps) {
           headers: { 'Content-Type': 'application/json' },
           body: JSON.stringify({
             command: 'create',
-            entity: selectedElement,
-            parent: FIXED_CONTEXT.parent,
+            entity: createEntityType,
+            parent: createParent,
             attributes: attrs,
           }),
         }
       )
 
       if (!res.ok) {
-        throw new Error(`Failed to create entity (${res.status})`)
+        const msg = await parseApiErrorMessage(res)
+        throw new Error(msg)
       }
 
       router.refresh()
       setAddPopoverOpen(false)
-      setSelectedElement(null)
+      setCreateEntityType('')
+      setCreateParent(FIXED_CONTEXT.parent)
       setAttributes([{ key: 'name', value: '' }])
     } catch (error) {
       console.error('Failed to create entity:', error)
-      alert('Failed to create entity')
+      setAddErrorMessage(error instanceof Error ? error.message : 'Failed to create entity')
     } finally {
       setLoading(false)
     }
   }
 
   const handleUpdateEntity = async () => {
-    if (!entityToDelete) {
+    const current = selectedElementRef.current
+    if (!current || current.entity === 'root') {
       setEditPopoverOpen(false)
       return
     }
@@ -191,8 +453,10 @@ export function DiagramEditor({ diagram }: DiagramEditorProps) {
     try {
       const attrs: Record<string, string> = {}
       for (const { key, value } of attributes) {
-        if (value.trim()) {
-          attrs[key] = value.trim()
+        const k = key.trim()
+        const v = value.trim()
+        if (k && v) {
+          attrs[k] = v
         }
       }
 
@@ -203,8 +467,8 @@ export function DiagramEditor({ diagram }: DiagramEditorProps) {
           headers: { 'Content-Type': 'application/json' },
           body: JSON.stringify({
             command: 'update',
-            entity: selectedElement?.entity || 'site',
-            id: entityToDelete,
+            entity: current.entity,
+            id: current.id,
             parent: FIXED_CONTEXT.parent,
             attributes: attrs,
           }),
@@ -212,23 +476,24 @@ export function DiagramEditor({ diagram }: DiagramEditorProps) {
       )
 
       if (!res.ok) {
-        throw new Error(`Failed to update entity (${res.status})`)
+        const msg = await parseApiErrorMessage(res)
+        throw new Error(msg)
       }
 
       router.refresh()
       setEditPopoverOpen(false)
-      setEntityToDelete(null)
       setAttributes([{ key: 'name', value: '' }])
     } catch (error) {
       console.error('Failed to update entity:', error)
-      alert('Failed to update entity')
+      setErrorMessage(error instanceof Error ? error.message : 'Failed to update entity')
     } finally {
       setLoading(false)
     }
   }
 
   const handleDeleteEntity = async () => {
-    if (!entityToDelete || !selectedElement) return
+    const current = selectedElementRef.current
+    if (!current || current.entity === 'root') return
 
     setLoading(true)
     try {
@@ -239,8 +504,8 @@ export function DiagramEditor({ diagram }: DiagramEditorProps) {
           headers: { 'Content-Type': 'application/json' },
           body: JSON.stringify({
             command: 'delete',
-            entity: selectedElement.entity || 'site',
-            id: entityToDelete,
+            entity: current.entity,
+            id: current.id,
             parent: FIXED_CONTEXT.parent,
           }),
         }
@@ -253,44 +518,40 @@ export function DiagramEditor({ diagram }: DiagramEditorProps) {
       router.refresh()
     } catch (error) {
       console.error('Failed to delete entity:', error)
-      alert('Failed to delete entity')
+      setErrorMessage('Failed to delete entity')
     } finally {
       setLoading(false)
       setDeleteDialogOpen(false)
-      setEntityToDelete(null)
     }
   }
 
-  const handleMoveEntity = async () => {
-    if (!entityToDelete || !selectedElement || !targetElement) return
+  const handleMoveEntity = async (target: { entity: string; id: string } | { root: 'infrastructure' | 'definitions' }) => {
+    const current = selectedElementRef.current
+    if (!current || current.entity === 'root') return
 
     setLoading(true)
     try {
-      const res = await fetch(
-        `/api/diagrams/${diagram.id}/commands`,
-        {
-          method: 'POST',
-          headers: { 'Content-Type': 'application/json' },
-          body: JSON.stringify({
-            command: 'move',
-            entity: selectedElement.entity || 'site',
-            id: entityToDelete,
-            parent: FIXED_CONTEXT.parent,
-          }),
-        }
-      )
+      const parent = 'root' in target ? { root: target.root } : { entity: target.entity, id: target.id }
+
+      const res = await fetch(`/api/diagrams/${diagram.id}/commands`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          command: 'move',
+          entity: current.entity,
+          id: current.id,
+          parent,
+        }),
+      })
 
       if (!res.ok) {
         throw new Error(`Failed to move entity (${res.status})`)
       }
 
       router.refresh()
-      setMovePopoverOpen(false)
-      setEntityToDelete(null)
-      setTargetElement('')
     } catch (error) {
       console.error('Failed to move entity:', error)
-      alert('Failed to move entity')
+      setErrorMessage('Failed to move entity')
     } finally {
       setLoading(false)
     }
@@ -368,31 +629,41 @@ export function DiagramEditor({ diagram }: DiagramEditorProps) {
                 )}
                 <ContextMenu>
                   <ContextMenuTrigger asChild>
-                    <PopoverTrigger asChild>
-                      <div
-                        ref={contextMenuRef}
-                        onClick={(event) => {
-                          const rect = contextMenuRef.current?.getBoundingClientRect()
-                          if (rect) {
-                            const margin = 16
-                            const x = Math.min(Math.max(event.clientX - rect.left, margin), rect.width - margin)
-                            const y = Math.min(Math.max(event.clientY - rect.top, margin), rect.height - margin)
-                            setEditPopoverPoint({ x, y })
+                    <div
+                      ref={contextMenuRef}
+                      className="bg-card border-2 border-border rounded-lg p-2 h-full text-card-foreground select-text w-full overflow-hidden"
+                    >
+                      <MermaidViewer
+                        ref={mermaidViewerRef}
+                        code={diagram.content}
+                        className="h-full w-full"
+                        fallbackClassName="h-full w-full overflow-auto p-4 font-mono text-sm whitespace-pre-wrap break-words"
+                        ariaLabel="Diagram preview"
+                        onElementEvent={(ev) => {
+                          setErrorMessage(null)
+
+                          const parsed = parseMermaidDomainRef(ev.mermaidId)
+                          if (!parsed) return
+
+                          const nextSel: SelectedDomainRef = {
+                            mermaidId: ev.mermaidId,
+                            entity: parsed.entity,
+                            id: parsed.id,
                           }
-                          setSelectedElement({ entity: 'region', name: 'Selected Element' })
-                          setEditPopoverOpen(true)
+
+                          setSelectedElement(nextSel)
+                          void loadSelectedElementContext(nextSel)
+
+                          if (ev.type === 'click') {
+                            setPointFromClient(ev.clientX, ev.clientY)
+                            setEditPopoverOpen(true)
+                          } else {
+                            // Right-click selects element; Radix context menu opens via bubbling event.
+                            setEditPopoverOpen(false)
+                          }
                         }}
-                        className="bg-card border-2 border-border rounded-lg p-2 h-full text-card-foreground select-text cursor-pointer w-full overflow-hidden"
-                      >
-                        <MermaidViewer
-                          ref={mermaidViewerRef}
-                          code={diagram.content}
-                          className="h-full w-full"
-                          fallbackClassName="h-full w-full overflow-auto p-4 font-mono text-sm whitespace-pre-wrap break-words"
-                          ariaLabel="Diagram preview"
-                        />
-                      </div>
-                    </PopoverTrigger>
+                      />
+                    </div>
                   </ContextMenuTrigger>
                   <ContextMenuContent>
               <ContextMenuSub>
@@ -401,42 +672,22 @@ export function DiagramEditor({ diagram }: DiagramEditorProps) {
                   Add
                 </ContextMenuSubTrigger>
                 <ContextMenuSubContent>
-                  <ContextMenuItem
-                    onClick={() => {
-                      setSelectedElement({ entity: 'region', name: 'New Region' })
-                      setEditPopoverOpen(false)
-                      handleOpenAddPopover()
-                    }}
-                  >
-                    Region
-                  </ContextMenuItem>
-                  <ContextMenuItem
-                    onClick={() => {
-                      setSelectedElement({ entity: 'site', name: 'New Site' })
-                      setEditPopoverOpen(false)
-                      handleOpenAddPopover()
-                    }}
-                  >
-                    Site
-                  </ContextMenuItem>
-                  <ContextMenuItem
-                    onClick={() => {
-                      setSelectedElement({ entity: 'container', name: 'New Container' })
-                      setEditPopoverOpen(false)
-                      handleOpenAddPopover()
-                    }}
-                  >
-                    Container
-                  </ContextMenuItem>
-                  <ContextMenuItem
-                    onClick={() => {
-                      setSelectedElement({ entity: 'node', name: 'New Node' })
-                      setEditPopoverOpen(false)
-                      handleOpenAddPopover()
-                    }}
-                  >
-                    Deployment Node
-                  </ContextMenuItem>
+                  {entityTypes.length ? (
+                    entityTypes.map((t) => (
+                      <ContextMenuItem
+                        key={t}
+                        onClick={() => {
+                          void openAddPopoverWithType(t)
+                        }}
+                      >
+                        {t}
+                      </ContextMenuItem>
+                    ))
+                  ) : (
+                    <ContextMenuItem disabled>
+                      <span className="text-xs text-muted-foreground">Loading…</span>
+                    </ContextMenuItem>
+                  )}
                 </ContextMenuSubContent>
               </ContextMenuSub>
 
@@ -446,11 +697,28 @@ export function DiagramEditor({ diagram }: DiagramEditorProps) {
                   Move
                 </ContextMenuSubTrigger>
                 <ContextMenuSubContent>
-                  <ContextMenuItem disabled>
-                    <span className="text-xs text-muted-foreground">
-                      Select a target element
-                    </span>
-                  </ContextMenuItem>
+                  {moveTargets.length ? (
+                    moveTargets.map((t) => (
+                      <ContextMenuItem
+                        key={`${t.entity ?? 'root'}:${t.id}`}
+                        onClick={() => {
+                          if (t.entity === 'root' && t.id === 'infrastructure') {
+                            void handleMoveEntity({ root: 'infrastructure' })
+                            return
+                          }
+                          if (!t.entity || !t.id) return
+                          void handleMoveEntity({ entity: t.entity, id: t.id })
+                        }}
+                          disabled={!selectedElement || selectedElement.entity === 'root'}
+                      >
+                        {t.name ?? `${t.entity}_${t.id}`} ({t.entity})
+                      </ContextMenuItem>
+                    ))
+                  ) : (
+                    <ContextMenuItem disabled>
+                      <span className="text-xs text-muted-foreground">Loading…</span>
+                    </ContextMenuItem>
+                  )}
                 </ContextMenuSubContent>
               </ContextMenuSub>
 
@@ -458,13 +726,14 @@ export function DiagramEditor({ diagram }: DiagramEditorProps) {
 
               <ContextMenuItem
                 onClick={() => {
-                  setSelectedElement({ entity: 'site', name: 'Edit' })
+                  const current = selectedElementRef.current
+                  if (!current) return
                   const rect = contextMenuRef.current?.getBoundingClientRect()
-                  if (rect) {
-                    setEditPopoverPoint({ x: rect.width / 2, y: rect.height / 2 })
-                  }
+                  if (rect) setEditPopoverPoint({ x: rect.width / 2, y: rect.height / 2 })
+                  void loadSelectedElementContext(current)
                   setEditPopoverOpen(true)
                 }}
+                disabled={!selectedElement || selectedElement.entity === 'root'}
               >
                 <Edit2 className="mr-2 h-4 w-4" />
                 Edit Selected
@@ -472,9 +741,11 @@ export function DiagramEditor({ diagram }: DiagramEditorProps) {
 
               <ContextMenuItem
                 onClick={() => {
+                  if (!selectedElementRef.current) return
                   setDeleteDialogOpen(true)
                 }}
                 className="text-destructive"
+                disabled={!selectedElement || selectedElement.entity === 'root'}
               >
                 <Trash2 className="mr-2 h-4 w-4" />
                 Delete Selected
@@ -497,33 +768,76 @@ export function DiagramEditor({ diagram }: DiagramEditorProps) {
                   </p>
                 </div>
 
+                {errorMessage && (
+                  <div className="rounded-md border border-destructive/40 bg-destructive/10 px-3 py-2 text-sm text-destructive">
+                    {errorMessage}
+                  </div>
+                )}
+
                 <div className="grid gap-3">
                   <div className="grid gap-2">
-                    <Label>Attributes</Label>
-                    {attributes.map((attr, idx) => (
-                      <div key={idx} className="flex gap-2">
-                        <Input
-                          placeholder="Key"
-                          value={attr.key}
-                          onChange={(e) => {
-                            const newAttrs = [...attributes]
-                            newAttrs[idx].key = e.target.value
-                            setAttributes(newAttrs)
-                          }}
-                          disabled={loading}
-                        />
-                        <Input
-                          placeholder="Value"
-                          value={attr.value}
-                          onChange={(e) => {
-                            const newAttrs = [...attributes]
-                            newAttrs[idx].value = e.target.value
-                            setAttributes(newAttrs)
-                          }}
-                          disabled={loading}
-                        />
-                      </div>
-                    ))}
+                    {(() => {
+                      const entityType = selectedElement?.entity ?? ''
+                      const requiredKeys = entityType ? (entityTypeDetails[entityType]?.requiredAttributes ?? []) : []
+                      const requiredSet = new Set(requiredKeys)
+                      const otherKeys = attributes
+                        .map((a) => a.key.trim())
+                        .filter((k) => k && !requiredSet.has(k))
+
+                      const renderField = (key: string, required: boolean) => {
+                        const value = getAttributeValue(attributes, key)
+                        const label = required ? (
+                          <span className="inline-flex items-center gap-1">
+                            <span>{key}</span>
+                            <span className="text-destructive">*</span>
+                          </span>
+                        ) : (
+                          key
+                        )
+
+                        const onValueChange = (next: string) => {
+                          if (!entityType) return
+                          if (key === 'name') return handleNameValueChange(entityType, next)
+                          if (key === 'slug') return handleSlugValueChange(entityType, next)
+                          applyAttributeUpdates(entityType, { [key]: next })
+                        }
+
+                        return (
+                          <div key={key} className="grid gap-1">
+                            <Label>{label}</Label>
+                            <Input
+                              value={value}
+                              onChange={(e) => onValueChange(e.target.value)}
+                              disabled={loading}
+                            />
+                          </div>
+                        )
+                      }
+
+                      return (
+                        <div className="grid gap-3">
+                          {requiredKeys.length > 0 ? (
+                            <>
+                              <Label>Required fields</Label>
+                              {requiredKeys.map((k) => renderField(k, true))}
+                            </>
+                          ) : (
+                            <Label>Attributes</Label>
+                          )}
+
+                          {otherKeys.length > 0 && (
+                            <>
+                              <Label>Other fields</Label>
+                              {otherKeys.map((k) => renderField(k, false))}
+                            </>
+                          )}
+
+                          {requiredKeys.length === 0 && otherKeys.length === 0 && (
+                            <div className="text-sm text-muted-foreground">No editable attributes for this selection.</div>
+                          )}
+                        </div>
+                      )
+                    })()}
                   </div>
                 </div>
 
@@ -539,7 +853,7 @@ export function DiagramEditor({ diagram }: DiagramEditorProps) {
                   <Button
                     size="sm"
                     onClick={handleUpdateEntity}
-                    disabled={loading}
+                    disabled={loading || selectedElement?.entity === 'root'}
                   >
                     {loading ? 'Updating...' : 'Update'}
                   </Button>
@@ -558,8 +872,24 @@ export function DiagramEditor({ diagram }: DiagramEditorProps) {
       </div>
 
       {/* Add Entity Popover */}
-      <Popover open={addPopoverOpen} onOpenChange={setAddPopoverOpen}>
-        <PopoverContent className="w-80">
+      <Popover
+        open={addPopoverOpen}
+        onOpenChange={(open) => {
+          setAddPopoverOpen(open)
+          if (!open) {
+            setAddPopoverPoint(null)
+            setCreateEntityType('')
+            setCreateParent(FIXED_CONTEXT.parent)
+            setAddErrorMessage(null)
+          }
+        }}
+      >
+        {addPopoverPoint && (
+          <PopoverAnchor asChild>
+            <span style={{ position: 'fixed', left: addPopoverPoint.x, top: addPopoverPoint.y, width: 1, height: 1 }} />
+          </PopoverAnchor>
+        )}
+        <PopoverContent className="w-80" align="center" sideOffset={12}>
           <div className="grid gap-4">
             <div className="space-y-2">
               <h4 className="font-medium leading-none">Add New Entity</h4>
@@ -568,17 +898,27 @@ export function DiagramEditor({ diagram }: DiagramEditorProps) {
               </p>
             </div>
 
+            {addErrorMessage && (
+              <div className="rounded-md border border-destructive/40 bg-destructive/10 px-3 py-2 text-sm text-destructive whitespace-pre-line">
+                {addErrorMessage}
+              </div>
+            )}
+
             <div className="grid gap-3">
               <div className="grid gap-2">
                 <Label htmlFor="entity-type">Entity Type</Label>
                 <select
                   id="entity-type"
-                  value={selectedElement?.entity || ''}
+                  value={createEntityType}
                   onChange={(e) => {
-                    setSelectedElement({
-                      ...selectedElement,
-                      entity: e.target.value,
-                    })
+                    const nextType = e.target.value
+                    setAddErrorMessage(null)
+                    setCreateEntityType(nextType)
+                    if (nextType) {
+                      slugTouchedRef.current = false
+                      slugAutoRef.current = ''
+                      setAttributes((cur) => ensureAttributesForEntityType(nextType, cur))
+                    }
                   }}
                   className="flex h-10 w-full rounded-md border border-input bg-background px-3 py-2 text-sm"
                   disabled={loading}
@@ -610,9 +950,31 @@ export function DiagramEditor({ diagram }: DiagramEditorProps) {
                       placeholder="Value"
                       value={attr.value}
                       onChange={(e) => {
-                        const newAttrs = [...attributes]
-                        newAttrs[idx].value = e.target.value
-                        setAttributes(newAttrs)
+                        const entityType = createEntityType
+                        if (!entityType) {
+                          const newAttrs = [...attributes]
+                          newAttrs[idx].value = e.target.value
+                          setAttributes(newAttrs)
+                          return
+                        }
+
+                        const key = attr.key.trim()
+                        if (!key) {
+                          const newAttrs = [...attributes]
+                          newAttrs[idx].value = e.target.value
+                          setAttributes(newAttrs)
+                          return
+                        }
+                        if (key === 'name') {
+                          handleNameValueChange(entityType, e.target.value)
+                          return
+                        }
+                        if (key === 'slug') {
+                          handleSlugValueChange(entityType, e.target.value)
+                          return
+                        }
+
+                        applyAttributeUpdates(entityType, { [key]: e.target.value })
                       }}
                       disabled={loading}
                     />
@@ -647,61 +1009,9 @@ export function DiagramEditor({ diagram }: DiagramEditorProps) {
               <Button
                 size="sm"
                 onClick={handleCreateEntity}
-                disabled={loading || !selectedElement?.entity}
+                disabled={loading || !createEntityType}
               >
                 {loading ? 'Creating...' : 'Create'}
-              </Button>
-            </div>
-          </div>
-        </PopoverContent>
-      </Popover>
-
-      {/* Move Entity Popover */}
-      <Popover open={movePopoverOpen} onOpenChange={setMovePopoverOpen}>
-        <PopoverContent className="w-80">
-          <div className="grid gap-4">
-            <div className="space-y-2">
-              <h4 className="font-medium leading-none">Move Entity</h4>
-              <p className="text-sm text-muted-foreground">
-                Move entity to a new parent
-              </p>
-            </div>
-
-            <div className="grid gap-3">
-              <div className="grid gap-2">
-                <Label htmlFor="target-element">Target Parent</Label>
-                <select
-                  id="target-element"
-                  value={targetElement}
-                  onChange={(e) => setTargetElement(e.target.value)}
-                  className="flex h-10 w-full rounded-md border border-input bg-background px-3 py-2 text-sm"
-                  disabled={loading}
-                >
-                  <option value="">Select a parent...</option>
-                  {childElements.map((el) => (
-                    <option key={el.id} value={el.id}>
-                      {el.name} ({el.entity})
-                    </option>
-                  ))}
-                </select>
-              </div>
-            </div>
-
-            <div className="flex gap-2 justify-end">
-              <Button
-                variant="outline"
-                size="sm"
-                onClick={() => setMovePopoverOpen(false)}
-                disabled={loading}
-              >
-                Cancel
-              </Button>
-              <Button
-                size="sm"
-                onClick={handleMoveEntity}
-                disabled={loading || !targetElement}
-              >
-                {loading ? 'Moving...' : 'Move'}
               </Button>
             </div>
           </div>
