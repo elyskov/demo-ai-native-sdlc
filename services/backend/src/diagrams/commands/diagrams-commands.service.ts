@@ -42,7 +42,7 @@ export class DiagramsCommandsService {
     }
 
     if (dto.command === 'list-types') {
-      return this.applyListTypes();
+      return this.applyListTypes(dto);
     }
 
     if (dto.command === 'list-elements') {
@@ -299,11 +299,27 @@ export class DiagramsCommandsService {
     return { id: diagramId, name: diagramName, content: updated };
   }
 
-  // List entity types: return available entity types from model (mock implementation)
-  private applyListTypes() {
+  // List entity types: return valid child entity types under a given parent context
+  private applyListTypes(dto: DiagramCommandDto) {
     const model = this.modelService.get();
     const entities = model.entities ?? {};
-    const types = Object.keys(entities).sort();
+
+    const parent = this.parseParent(dto);
+    if (!parent) {
+      throw new BadRequestException('Parent is required for list-types');
+    }
+
+    const types = Array.from(
+      new Set(
+        Object.keys(entities).filter((childType) => {
+          const allowed = entities[childType]?.parent?.allowed ?? [];
+          return allowed.some((a: any) => {
+            if ('root' in parent) return Boolean(a?.root) && a.root === parent.root;
+            return Boolean(a?.entity) && a.entity === parent.entity;
+          });
+        }),
+      ),
+    ).sort((a, b) => a.localeCompare(b));
 
     const details: Record<string, { attributes: string[]; requiredAttributes: string[] }> = {};
     for (const type of types) {
@@ -319,32 +335,89 @@ export class DiagramsCommandsService {
     return { types, details };
   }
 
-  // List elements: return child entities available under a given parent (mock implementation)
+  // List elements: return candidate parent targets for moving the current element type
   private async applyListElements(diagramId: string, dto: DiagramCommandDto) {
-    const parent = this.parseParent(dto);
-    if (!parent) {
-      throw new BadRequestException('Parent is required for list-elements');
+    const model = this.modelService.get();
+    const entityCfg = model.entities?.[dto.entity];
+    if (!entityCfg) {
+      throw new BadRequestException(`Unknown entity '${dto.entity}'`);
     }
 
-    const state = await this.domainStore.load(diagramId);
-    
-    // Find all objects matching the parent context
-    const elements = state.objects
-      .filter((obj) => {
-        if ('root' in parent && 'root' in obj.parent) {
-          return obj.parent.root === parent.root;
-        }
-        if ('entity' in parent && 'entity' in obj.parent) {
-          return obj.parent.entity === parent.entity && obj.parent.id === parent.id;
-        }
-        return false;
-      })
-      .map((obj) => ({
-        id: obj.id,
-        entity: obj.entity,
-        name: obj.attributes?.name ?? `${obj.entity}_${obj.id}`,
-      }));
+    const allowed = entityCfg.parent?.allowed ?? [];
+    const allowedParentEntities = Array.from(
+      new Set(allowed.map((a: any) => a?.entity).filter((v: any) => typeof v === 'string' && v.length)),
+    ).sort((a, b) => a.localeCompare(b));
 
-    return { elements };
+    const allowedRoots = Array.from(
+      new Set(allowed.map((a: any) => a?.root).filter((v: any) => v === 'definitions' || v === 'infrastructure')),
+    ).sort((a, b) => a.localeCompare(b));
+
+    const state = await this.domainStore.load(diagramId);
+
+    const selfKey = dto.id ? `${dto.entity}:${dto.id}` : null;
+    const descendantKeys = selfKey ? this.collectDescendantKeys(state.objects, selfKey) : new Set<string>();
+
+    const elements = Array.from(
+      new Map(
+        state.objects
+          .filter((obj) => allowedParentEntities.includes(obj.entity))
+          .filter((obj) => {
+            const key = `${obj.entity}:${obj.id}`;
+            if (selfKey && key === selfKey) return false;
+            if (descendantKeys.has(key)) return false;
+            return true;
+          })
+          .map((obj) => [
+            `${obj.entity}:${obj.id}`,
+            {
+              id: obj.id,
+              entity: obj.entity,
+              name: obj.attributes?.name ?? `${obj.entity}_${obj.id}`,
+            },
+          ]),
+      ).values(),
+    ).sort((a, b) => {
+      const e = a.entity.localeCompare(b.entity);
+      if (e) return e;
+      const n = String(a.name ?? '').localeCompare(String(b.name ?? ''));
+      if (n) return n;
+      return a.id.localeCompare(b.id);
+    });
+
+    const roots = allowedRoots.map((root) => {
+      const description = (model as any)?.roots?.[root]?.description;
+      const fallback = root === 'definitions' ? 'Definitions (root)' : 'Infrastructure (root)';
+      return { root, name: typeof description === 'string' && description.trim() ? `${description} (root)` : fallback };
+    });
+
+    return { elements, roots };
+  }
+
+  private collectDescendantKeys(objects: DomainObject[], startKey: string): Set<string> {
+    const byParent = new Map<string, string[]>();
+    for (const obj of objects) {
+      const childKey = `${obj.entity}:${obj.id}`;
+
+      const parentKey =
+        'root' in obj.parent
+          ? `root:${obj.parent.root}`
+          : `${obj.parent.entity}:${obj.parent.id}`;
+
+      const list = byParent.get(parentKey);
+      if (list) list.push(childKey);
+      else byParent.set(parentKey, [childKey]);
+    }
+
+    const visited = new Set<string>();
+    const stack = [...(byParent.get(startKey) ?? [])];
+    while (stack.length) {
+      const key = stack.pop()!;
+      if (visited.has(key)) continue;
+      visited.add(key);
+      const kids = byParent.get(key);
+      if (kids?.length) stack.push(...kids);
+    }
+
+    return visited;
   }
 }
