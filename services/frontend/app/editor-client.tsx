@@ -79,10 +79,11 @@ type CreateParentRef =
   | { root: 'definitions' | 'infrastructure' }
   | { entity: string; id: string }
 
-// Fixed infrastructure root context for all operations
-const FIXED_CONTEXT: { entity: string; parent: CreateParentRef } = {
-  entity: 'infrastructure',
-  parent: { root: 'infrastructure' },
+const DEFAULT_ROOT_PARENT: CreateParentRef = { root: 'infrastructure' }
+
+type ListElementsResponse = {
+  elements: EntityType[]
+  roots?: Array<{ root: 'definitions' | 'infrastructure'; name: string }>
 }
 
 export function DiagramEditor({ diagram }: DiagramEditorProps) {
@@ -102,7 +103,8 @@ export function DiagramEditor({ diagram }: DiagramEditorProps) {
   const [entityTypes, setEntityTypes] = useState<string[]>([])
   const [entityTypeDetails, setEntityTypeDetails] = useState<Record<string, EntityTypeDetails>>({})
   const [childElements, setChildElements] = useState<EntityType[]>([])
-  const [createParent, setCreateParent] = useState<CreateParentRef>(FIXED_CONTEXT.parent)
+  const [moveRoots, setMoveRoots] = useState<Array<{ root: 'definitions' | 'infrastructure'; name: string }>>([])
+  const [createParent, setCreateParent] = useState<CreateParentRef>(DEFAULT_ROOT_PARENT)
   const [attributes, setAttributes] = useState<EntityAttribute[]>([
     { key: 'name', value: '' },
   ])
@@ -110,20 +112,17 @@ export function DiagramEditor({ diagram }: DiagramEditorProps) {
   const [errorMessage, setErrorMessage] = useState<string | null>(null)
   const [addErrorMessage, setAddErrorMessage] = useState<string | null>(null)
 
-  const typesLoadedRef = useRef(false)
-  const moveTargetsLoadedRef = useRef(false)
+  const [entityTypesLoaded, setEntityTypesLoaded] = useState(false)
+  const [moveTargetsLoaded, setMoveTargetsLoaded] = useState(false)
 
   useEffect(() => {
     selectedElementRef.current = selectedElement
   }, [selectedElement])
 
   const moveTargets = useMemo(() => {
-    // Add the fixed root as a convenient move target.
-    return [
-      { id: 'infrastructure', entity: 'root', name: 'Infrastructure (root)' },
-      ...childElements,
-    ]
-  }, [childElements])
+    const roots = (moveRoots ?? []).map((r) => ({ id: r.root, entity: 'root', name: r.name }))
+    return [...roots, ...childElements]
+  }, [childElements, moveRoots])
 
   const setPointFromClient = (clientX: number, clientY: number) => {
     const rect = contextMenuRef.current?.getBoundingClientRect()
@@ -134,9 +133,18 @@ export function DiagramEditor({ diagram }: DiagramEditorProps) {
     setEditPopoverPoint({ x, y })
   }
 
-  const preloadEntityTypes = async () => {
-    if (typesLoadedRef.current) return
-    typesLoadedRef.current = true
+  const parentRefFromSelection = (sel: SelectedDomainRef | null): CreateParentRef => {
+    if (!sel) return DEFAULT_ROOT_PARENT
+    if (sel.entity === 'root') {
+      return { root: sel.id === 'definitions' ? 'definitions' : 'infrastructure' }
+    }
+    return { entity: sel.entity, id: sel.id }
+  }
+
+  const loadEntityTypes = async (parent: CreateParentRef) => {
+    setEntityTypesLoaded(false)
+    setEntityTypes([])
+    setEntityTypeDetails({})
 
     try {
       const res = await fetch(`/api/diagrams/${diagram.id}/commands`, {
@@ -144,8 +152,8 @@ export function DiagramEditor({ diagram }: DiagramEditorProps) {
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({
           command: 'list-types',
-          entity: FIXED_CONTEXT.entity,
-          parent: FIXED_CONTEXT.parent,
+          entity: 'infrastructure',
+          parent,
         }),
       })
 
@@ -158,9 +166,11 @@ export function DiagramEditor({ diagram }: DiagramEditorProps) {
       if (data.details && typeof data.details === 'object') {
         setEntityTypeDetails(data.details)
       }
+      setEntityTypesLoaded(true)
     } catch (error) {
       console.error('Failed to load entity types:', error)
       setErrorMessage('Failed to load entity types')
+      setEntityTypesLoaded(true)
     }
   }
 
@@ -266,9 +276,17 @@ export function DiagramEditor({ diagram }: DiagramEditorProps) {
     applyAttributeUpdates(entityType, { slug: nextSlug })
   }
 
-  const preloadMoveTargets = async () => {
-    if (moveTargetsLoadedRef.current) return
-    moveTargetsLoadedRef.current = true
+  const loadMoveTargets = async (sel: SelectedDomainRef) => {
+    if (sel.entity === 'root') {
+      setChildElements([])
+      setMoveRoots([])
+      setMoveTargetsLoaded(true)
+      return
+    }
+
+    setMoveTargetsLoaded(false)
+    setChildElements([])
+    setMoveRoots([])
 
     try {
       const res = await fetch(`/api/diagrams/${diagram.id}/commands`, {
@@ -276,8 +294,8 @@ export function DiagramEditor({ diagram }: DiagramEditorProps) {
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({
           command: 'list-elements',
-          entity: FIXED_CONTEXT.entity,
-          parent: FIXED_CONTEXT.parent,
+          entity: sel.entity,
+          id: sel.id,
         }),
       })
 
@@ -285,20 +303,43 @@ export function DiagramEditor({ diagram }: DiagramEditorProps) {
         throw new Error(`Failed to load elements (${res.status})`)
       }
 
-      const data = (await res.json()) as { elements: EntityType[] }
-      setChildElements(data.elements)
+      const data = (await res.json()) as ListElementsResponse
+      setChildElements(Array.isArray(data.elements) ? data.elements : [])
+      setMoveRoots(Array.isArray(data.roots) ? data.roots : [])
+      setMoveTargetsLoaded(true)
     } catch (error) {
       console.error('Failed to load elements:', error)
       setErrorMessage('Failed to load move targets')
+      setMoveTargetsLoaded(true)
+    }
+  }
+
+  const refreshMenuData = () => {
+    const sel = selectedElementRef.current
+    void loadEntityTypes(parentRefFromSelection(sel))
+    if (sel && sel.entity !== 'root') {
+      void loadMoveTargets(sel)
+    } else {
+      setChildElements([])
+      setMoveRoots([])
+      setMoveTargetsLoaded(true)
     }
   }
 
   useEffect(() => {
-    // Prefill context menu data so submenus are ready when opened.
-    void preloadEntityTypes()
-    void preloadMoveTargets()
+    // Keep menu options in sync with the current selection context.
+    const sel = selectedElement
+    void loadEntityTypes(parentRefFromSelection(sel))
+
+    if (sel && sel.entity !== 'root') {
+      void loadMoveTargets(sel)
+    } else {
+      setChildElements([])
+      setMoveRoots([])
+      setMoveTargetsLoaded(true)
+    }
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [diagram.id])
+  }, [diagram.id, selectedElement?.entity, selectedElement?.id])
 
   const loadSelectedElementContext = async (ref: SelectedDomainRef) => {
     if (ref.entity === 'root') {
@@ -315,7 +356,7 @@ export function DiagramEditor({ diagram }: DiagramEditorProps) {
           command: 'get-element',
           entity: ref.entity,
           id: ref.id,
-          parent: FIXED_CONTEXT.parent,
+          parent: DEFAULT_ROOT_PARENT,
         }),
       })
 
@@ -360,7 +401,7 @@ export function DiagramEditor({ diagram }: DiagramEditorProps) {
         setCreateParent({ entity: current.entity, id: current.id })
       }
     } else {
-      setCreateParent(FIXED_CONTEXT.parent)
+      setCreateParent(DEFAULT_ROOT_PARENT)
     }
 
     setAttributes(ensureAttributesForEntityType(entityType, [{ key: 'name', value: '' }]))
@@ -382,8 +423,8 @@ export function DiagramEditor({ diagram }: DiagramEditorProps) {
     setAddPopoverOpen(false)
     window.setTimeout(() => setAddPopoverOpen(true), 0)
 
-    // Ensure types are loaded (best-effort, but don't block UI opening).
-    void preloadEntityTypes()
+    // Ensure types are loaded for the current parent context (best-effort).
+    void loadEntityTypes(parentRefFromSelection(selectedElementRef.current))
   }
 
   const handleCreateEntity = async () => {
@@ -432,8 +473,9 @@ export function DiagramEditor({ diagram }: DiagramEditorProps) {
       router.refresh()
       setAddPopoverOpen(false)
       setCreateEntityType('')
-      setCreateParent(FIXED_CONTEXT.parent)
+      setCreateParent(DEFAULT_ROOT_PARENT)
       setAttributes([{ key: 'name', value: '' }])
+      refreshMenuData()
     } catch (error) {
       console.error('Failed to create entity:', error)
       setAddErrorMessage(error instanceof Error ? error.message : 'Failed to create entity')
@@ -469,7 +511,7 @@ export function DiagramEditor({ diagram }: DiagramEditorProps) {
             command: 'update',
             entity: current.entity,
             id: current.id,
-            parent: FIXED_CONTEXT.parent,
+            parent: DEFAULT_ROOT_PARENT,
             attributes: attrs,
           }),
         }
@@ -483,6 +525,7 @@ export function DiagramEditor({ diagram }: DiagramEditorProps) {
       router.refresh()
       setEditPopoverOpen(false)
       setAttributes([{ key: 'name', value: '' }])
+      refreshMenuData()
     } catch (error) {
       console.error('Failed to update entity:', error)
       setErrorMessage(error instanceof Error ? error.message : 'Failed to update entity')
@@ -506,7 +549,7 @@ export function DiagramEditor({ diagram }: DiagramEditorProps) {
             command: 'delete',
             entity: current.entity,
             id: current.id,
-            parent: FIXED_CONTEXT.parent,
+            parent: DEFAULT_ROOT_PARENT,
           }),
         }
       )
@@ -516,6 +559,7 @@ export function DiagramEditor({ diagram }: DiagramEditorProps) {
       }
 
       router.refresh()
+      refreshMenuData()
     } catch (error) {
       console.error('Failed to delete entity:', error)
       setErrorMessage('Failed to delete entity')
@@ -549,6 +593,7 @@ export function DiagramEditor({ diagram }: DiagramEditorProps) {
       }
 
       router.refresh()
+      refreshMenuData()
     } catch (error) {
       console.error('Failed to move entity:', error)
       setErrorMessage('Failed to move entity')
@@ -672,7 +717,8 @@ export function DiagramEditor({ diagram }: DiagramEditorProps) {
                   Add
                 </ContextMenuSubTrigger>
                 <ContextMenuSubContent>
-                  {entityTypes.length ? (
+                  {entityTypesLoaded ? (
+                    entityTypes.length ? (
                     entityTypes.map((t) => (
                       <ContextMenuItem
                         key={t}
@@ -683,6 +729,11 @@ export function DiagramEditor({ diagram }: DiagramEditorProps) {
                         {t}
                       </ContextMenuItem>
                     ))
+                    ) : (
+                      <ContextMenuItem disabled>
+                        <span className="text-xs text-muted-foreground">No available types</span>
+                      </ContextMenuItem>
+                    )
                   ) : (
                     <ContextMenuItem disabled>
                       <span className="text-xs text-muted-foreground">Loading…</span>
@@ -697,13 +748,14 @@ export function DiagramEditor({ diagram }: DiagramEditorProps) {
                   Move
                 </ContextMenuSubTrigger>
                 <ContextMenuSubContent>
-                  {moveTargets.length ? (
+                  {moveTargetsLoaded ? (
+                    moveTargets.length ? (
                     moveTargets.map((t) => (
                       <ContextMenuItem
                         key={`${t.entity ?? 'root'}:${t.id}`}
                         onClick={() => {
-                          if (t.entity === 'root' && t.id === 'infrastructure') {
-                            void handleMoveEntity({ root: 'infrastructure' })
+                          if (t.entity === 'root' && (t.id === 'infrastructure' || t.id === 'definitions')) {
+                            void handleMoveEntity({ root: t.id })
                             return
                           }
                           if (!t.entity || !t.id) return
@@ -714,6 +766,11 @@ export function DiagramEditor({ diagram }: DiagramEditorProps) {
                         {t.name ?? `${t.entity}_${t.id}`} ({t.entity})
                       </ContextMenuItem>
                     ))
+                    ) : (
+                      <ContextMenuItem disabled>
+                        <span className="text-xs text-muted-foreground">No move targets</span>
+                      </ContextMenuItem>
+                    )
                   ) : (
                     <ContextMenuItem disabled>
                       <span className="text-xs text-muted-foreground">Loading…</span>
@@ -870,7 +927,7 @@ export function DiagramEditor({ diagram }: DiagramEditorProps) {
           {/* Instructions */}
           <p className="text-sm text-muted-foreground mt-4 italic">
             Right-click on the diagram area above to add or manage elements.
-            All operations use the fixed infrastructure context.
+            Add and Move options follow the selected element and the model hierarchy.
           </p>
         </div>
       </div>
@@ -883,7 +940,7 @@ export function DiagramEditor({ diagram }: DiagramEditorProps) {
           if (!open) {
             setAddPopoverPoint(null)
             setCreateEntityType('')
-            setCreateParent(FIXED_CONTEXT.parent)
+            setCreateParent(DEFAULT_ROOT_PARENT)
             setAddErrorMessage(null)
           }
         }}

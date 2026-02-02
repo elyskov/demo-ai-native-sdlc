@@ -49,7 +49,13 @@ export class MermaidGeneratorService {
     const nl = mapping.globals?.line_separator ?? '\n';
 
     const mermaidId = this.applyTemplate(entityCfg.mermaid.id, { object });
-    const label = this.applyTemplate(entityCfg.mermaid.label, { object });
+    const labelTemplate =
+      typeof (entityCfg as any)?.mermaid?.label === 'string'
+        ? (entityCfg as any).mermaid.label
+        : typeof (entityCfg as any)?.label === 'string'
+          ? (entityCfg as any).label
+          : '{{ object.name }}';
+    const label = this.applyTemplate(labelTemplate, { object });
 
     const anchorStart = this.anchorStart(mermaidId);
     const anchorEnd = this.anchorEnd(mermaidId);
