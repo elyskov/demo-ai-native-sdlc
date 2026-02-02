@@ -32,7 +32,7 @@ entities:
       kind: structural
       type: subgraph
       id: "region_{{ object.id }}"
-      label: "*[region] {{ object.name }}*"
+    label: "region: {{ object.name }}"
 
 
   site:
@@ -40,7 +40,7 @@ entities:
       kind: structural
       type: subgraph
       id: "site_{{ object.id }}"
-      label: "*[site] {{ object.name }}*"
+    label: "site: {{ object.name }}"
 
 
   site-group:
@@ -50,7 +50,7 @@ entities:
       # Mermaid flowchart identifiers are safest with underscores.
       # We keep the domain entity name as 'site-group' but render as 'site_group_<id>'.
       id: "site_group_{{ object.id }}"
-      label: "*[site-group] {{ object.name }}*"
+    label: "site-group: {{ object.name }}"
 
 
   location:
@@ -58,7 +58,7 @@ entities:
       kind: structural
       type: subgraph
       id: "location_{{ object.id }}"
-      label: "*[location] {{ object.name }}*"
+    label: "location: {{ object.name }}"
 
 
   rack:
@@ -66,7 +66,7 @@ entities:
       kind: structural
       type: subgraph
       id: "rack_{{ object.id }}"
-      label: "*[rack] {{ object.name }}*"
+    label: "rack: {{ object.name }}"
 
 
   device:
@@ -74,7 +74,7 @@ entities:
       kind: structural
       type: subgraph
       id: "device_{{ object.id }}"
-      label: "*[device] {{ object.name }}*"
+    label: "device: {{ object.name }}"
 
 
   interface:
