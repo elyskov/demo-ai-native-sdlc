@@ -43,6 +43,16 @@ entities:
       label: "*{{ object.name }}*"
 
 
+  site-group:
+    mermaid:
+      kind: structural
+      type: subgraph
+      # Mermaid flowchart identifiers are safest with underscores.
+      # We keep the domain entity name as 'site-group' but render as 'site_group_<id>'.
+      id: "site_group_{{ object.id }}"
+      label: "*{{ object.name }}*"
+
+
   location:
     mermaid:
       kind: structural
