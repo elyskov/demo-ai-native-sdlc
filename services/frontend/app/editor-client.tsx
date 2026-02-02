@@ -762,7 +762,11 @@ export function DiagramEditor({ diagram }: DiagramEditorProps) {
               >
               <div className="grid gap-4">
                 <div className="space-y-2">
-                  <h4 className="font-medium leading-none">Edit Entity</h4>
+                  <h4 className="font-medium leading-none">
+                    {selectedElement?.entity && selectedElement.entity !== 'root'
+                      ? `[${selectedElement.entity}] ${getAttributeValue(attributes, 'name') || selectedElement.id}`
+                      : 'Edit Entity'}
+                  </h4>
                   <p className="text-sm text-muted-foreground">
                     Update entity attributes
                   </p>

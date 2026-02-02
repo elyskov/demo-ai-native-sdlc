@@ -226,12 +226,59 @@ export const MermaidViewer = forwardRef<MermaidViewerHandle, MermaidViewerProps>
             return null
           }
 
+          const clickState: {
+            pointerId: number | null
+            startX: number
+            startY: number
+            moved: boolean
+            mermaidId: string | null
+          } = {
+            pointerId: null,
+            startX: 0,
+            startY: 0,
+            moved: false,
+            mermaidId: null,
+          }
+
+          const DRAG_THRESHOLD_PX = 6
+
           const onPointerDown = (ev: PointerEvent) => {
             if (ev.defaultPrevented) return
-            // Only treat primary-button click as selection.
             if (ev.button !== 0) return
-            const mermaidId = findMermaidIdFromTarget(ev.target)
+
+            clickState.pointerId = ev.pointerId
+            clickState.startX = ev.clientX
+            clickState.startY = ev.clientY
+            clickState.moved = false
+            clickState.mermaidId = findMermaidIdFromTarget(ev.target)
+          }
+
+          const onPointerMove = (ev: PointerEvent) => {
+            if (clickState.pointerId == null) return
+            if (ev.pointerId !== clickState.pointerId) return
+
+            const dx = ev.clientX - clickState.startX
+            const dy = ev.clientY - clickState.startY
+            if (Math.hypot(dx, dy) >= DRAG_THRESHOLD_PX) {
+              clickState.moved = true
+            }
+          }
+
+          const onPointerUp = (ev: PointerEvent) => {
+            if (clickState.pointerId == null) return
+            if (ev.pointerId !== clickState.pointerId) return
+
+            const mermaidId = clickState.mermaidId
+            const moved = clickState.moved
+
+            clickState.pointerId = null
+            clickState.mermaidId = null
+            clickState.moved = false
+
+            // If the user dragged to pan, do not treat it as a click.
+            if (moved) return
             if (!mermaidId) return
+
             onElementEvent?.({ type: 'click', mermaidId, clientX: ev.clientX, clientY: ev.clientY })
           }
 
@@ -248,6 +295,9 @@ export const MermaidViewer = forwardRef<MermaidViewerHandle, MermaidViewerProps>
           }
 
           svgEl.addEventListener('pointerdown', onPointerDown, { capture: true })
+          svgEl.addEventListener('pointermove', onPointerMove, { capture: true })
+          svgEl.addEventListener('pointerup', onPointerUp, { capture: true })
+          svgEl.addEventListener('pointercancel', onPointerUp, { capture: true })
           svgEl.addEventListener('contextmenu', onContextMenu, { capture: true })
 
           const svgPanZoomModule = (await import('svg-pan-zoom')) as unknown as { default?: SvgPanZoomFactory }
@@ -265,6 +315,9 @@ export const MermaidViewer = forwardRef<MermaidViewerHandle, MermaidViewerProps>
           const cleanupSvgListeners = () => {
             try {
               svgEl.removeEventListener('pointerdown', onPointerDown, { capture: true } as any)
+              svgEl.removeEventListener('pointermove', onPointerMove, { capture: true } as any)
+              svgEl.removeEventListener('pointerup', onPointerUp, { capture: true } as any)
+              svgEl.removeEventListener('pointercancel', onPointerUp, { capture: true } as any)
               svgEl.removeEventListener('contextmenu', onContextMenu, { capture: true } as any)
             } catch {
               // ignore
@@ -273,7 +326,7 @@ export const MermaidViewer = forwardRef<MermaidViewerHandle, MermaidViewerProps>
 
           panZoomRef.current = svgPanZoom(svgEl, {
             controlIconsEnabled: false,
-            panEnabled: false,
+            panEnabled: true,
             zoomEnabled: true,
             dblClickZoomEnabled: false,
             mouseWheelZoomEnabled: false,
