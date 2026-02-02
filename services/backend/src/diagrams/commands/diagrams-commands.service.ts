@@ -49,7 +49,39 @@ export class DiagramsCommandsService {
       return this.applyListElements(diagramId, dto);
     }
 
+    if (dto.command === 'get-element') {
+      return this.applyGetElement(diagramId, dto);
+    }
+
     throw new BadRequestException('Unsupported command');
+  }
+
+  private async applyGetElement(diagramId: string, dto: DiagramCommandDto) {
+    if (!dto.id) {
+      throw new BadRequestException('Missing id for get-element');
+    }
+
+    const state = await this.domainStore.load(diagramId);
+    const obj = state.objects.find((o) => o.id === dto.id && o.entity === dto.entity);
+    if (!obj) {
+      throw new NotFoundException(`Object '${dto.entity}:${dto.id}' not found in diagram domain state`);
+    }
+
+    const model = this.modelService.get();
+    const entityCfg = model.entities?.[dto.entity];
+    if (!entityCfg) {
+      throw new BadRequestException(`Unknown entity '${dto.entity}'`);
+    }
+
+    const attributeOrder = Object.keys(entityCfg.attributes ?? {});
+
+    return {
+      entity: obj.entity,
+      id: obj.id,
+      attributes: obj.attributes ?? {},
+      parent: obj.parent,
+      attributeOrder,
+    };
   }
 
   private async applyCreate(diagramId: string, diagramName: string, content: string, dto: DiagramCommandDto) {
@@ -248,15 +280,43 @@ export class DiagramsCommandsService {
     obj.attributes = mergedAttrs;
     await this.domainStore.save(diagramId, state);
 
+    // Rewrite the Mermaid anchored block deterministically so UI refresh reflects the change.
+    const mermaidId = this.resolveEntityMermaidId(obj.entity, obj.id);
+    const without = this.mermaid.removeBlockById(content, mermaidId);
+
+    const { block } = this.mermaid.renderEntityBlock(obj.entity, {
+      id: obj.id,
+      name: obj.attributes?.name,
+      ...obj.attributes,
+    });
+
+    const parentMermaidId = this.resolveParentMermaidId(obj.parent);
+    const updated = this.mermaid.insertBlockIntoParent(without, parentMermaidId, block);
+
+    await this.diagramsService.updateContent(diagramId, updated);
     this.logger.log(`Applied update to ${dto.entity} '${dto.id}' in diagram '${diagramId}'`);
-    return { id: diagramId, name: diagramName, content };
+
+    return { id: diagramId, name: diagramName, content: updated };
   }
 
   // List entity types: return available entity types from model (mock implementation)
   private applyListTypes() {
     const model = this.modelService.get();
-    const types = Object.keys(model.entities ?? {}).sort();
-    return { types };
+    const entities = model.entities ?? {};
+    const types = Object.keys(entities).sort();
+
+    const details: Record<string, { attributes: string[]; requiredAttributes: string[] }> = {};
+    for (const type of types) {
+      const cfg = entities[type];
+      const attrs = cfg?.attributes ?? {};
+      const attributeKeys = Object.keys(attrs);
+      details[type] = {
+        attributes: attributeKeys,
+        requiredAttributes: attributeKeys.filter((k) => Boolean((attrs as any)?.[k]?.required)),
+      };
+    }
+
+    return { types, details };
   }
 
   // List elements: return child entities available under a given parent (mock implementation)

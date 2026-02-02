@@ -13,6 +13,12 @@ type MermaidViewerProps = {
   className?: string
   fallbackClassName?: string
   ariaLabel?: string
+  onElementEvent?: (event: {
+    type: 'click' | 'contextmenu'
+    mermaidId: string
+    clientX: number
+    clientY: number
+  }) => void
 }
 
 type SvgPanZoomInstance = {
@@ -49,7 +55,7 @@ function readThemeHslVar(varName: string, fallback: string): string {
 }
 
 export const MermaidViewer = forwardRef<MermaidViewerHandle, MermaidViewerProps>(
-  ({ code, className, fallbackClassName, ariaLabel }, ref) => {
+  ({ code, className, fallbackClassName, ariaLabel, onElementEvent }, ref) => {
     const id = useId()
     const wrapperRef = useRef<HTMLDivElement>(null)
     const svgContainerRef = useRef<HTMLDivElement>(null)
@@ -180,6 +186,70 @@ export const MermaidViewer = forwardRef<MermaidViewerHandle, MermaidViewerProps>
           svgEl.setAttribute('width', '100%')
           svgEl.setAttribute('height', '100%')
 
+          // Mermaid interaction: bind to the rendered SVG DOM (via Mermaid API pipeline).
+          // We intentionally attach listeners after render and avoid brittle global selectors.
+          // Order matters: put longer tokens before their prefixes (e.g., site_group before site)
+          const entityAlternation = '(site[_-]group|region|site|location|rack|device|if|container|node)'
+          const rootAlternation = '(definitions|infrastructure|connections)'
+          // NOTE: Domain object ids are URL-friendly hex strings today; Mermaid may append
+          // internal suffixes like "-label"/"-text" to element ids. Avoid matching those.
+          const logicalIdRegex = new RegExp(`(attr_)?${entityAlternation}_[A-Za-z0-9]+|${rootAlternation}`)
+
+          const extractLogicalId = (value: string | null | undefined): string | null => {
+            const raw = value?.trim()
+            if (!raw) return null
+            const match = raw.match(logicalIdRegex)
+            return match?.[0] ?? null
+          }
+
+          const readTitleId = (el: Element): string | null => {
+            // Mermaid often emits a <title> inside the logical group.
+            const title = el.querySelector('title')
+            return extractLogicalId(title?.textContent ?? null)
+          }
+
+          const findMermaidIdFromTarget = (target: EventTarget | null): string | null => {
+            let cur: Element | null = target instanceof Element ? target : null
+            while (cur && cur !== svgEl) {
+              const id = extractLogicalId(cur.getAttribute('id'))
+              if (id) return id
+
+              const titleId = readTitleId(cur)
+              if (titleId) return titleId
+
+              // Some Mermaid renderers add data attributes; keep a minimal fallback.
+              const dataId = extractLogicalId((cur as any).dataset?.id)
+              if (dataId) return dataId
+
+              cur = cur.parentElement
+            }
+            return null
+          }
+
+          const onPointerDown = (ev: PointerEvent) => {
+            if (ev.defaultPrevented) return
+            // Only treat primary-button click as selection.
+            if (ev.button !== 0) return
+            const mermaidId = findMermaidIdFromTarget(ev.target)
+            if (!mermaidId) return
+            onElementEvent?.({ type: 'click', mermaidId, clientX: ev.clientX, clientY: ev.clientY })
+          }
+
+          const onContextMenu = (ev: MouseEvent) => {
+            const mermaidId = findMermaidIdFromTarget(ev.target)
+            if (!mermaidId) {
+              // IMPORTANT: block Radix ContextMenu trigger when user clicked empty whitespace.
+              ev.preventDefault()
+              ev.stopPropagation()
+              return
+            }
+            onElementEvent?.({ type: 'contextmenu', mermaidId, clientX: ev.clientX, clientY: ev.clientY })
+            // Do not stopPropagation: allow ContextMenu trigger to open at cursor.
+          }
+
+          svgEl.addEventListener('pointerdown', onPointerDown, { capture: true })
+          svgEl.addEventListener('contextmenu', onContextMenu, { capture: true })
+
           const svgPanZoomModule = (await import('svg-pan-zoom')) as unknown as { default?: SvgPanZoomFactory }
           const svgPanZoom = svgPanZoomModule.default
 
@@ -189,6 +259,17 @@ export const MermaidViewer = forwardRef<MermaidViewerHandle, MermaidViewerProps>
           }
 
           if (cancelled) return
+
+          // Cleanup SVG event listeners if a rerender happens.
+          // (The outer effect cleanup will also run, but keep this tight to the rendered SVG instance.)
+          const cleanupSvgListeners = () => {
+            try {
+              svgEl.removeEventListener('pointerdown', onPointerDown, { capture: true } as any)
+              svgEl.removeEventListener('contextmenu', onContextMenu, { capture: true } as any)
+            } catch {
+              // ignore
+            }
+          }
 
           panZoomRef.current = svgPanZoom(svgEl, {
             controlIconsEnabled: false,
@@ -203,6 +284,10 @@ export const MermaidViewer = forwardRef<MermaidViewerHandle, MermaidViewerProps>
           panZoomRef.current.resize()
           panZoomRef.current.fit()
           panZoomRef.current.center()
+
+          // If the component rerenders and replaces the SVG, the effect cleanup will run.
+          // This is a secondary guard in case Mermaid reuses the node.
+          if (cancelled) cleanupSvgListeners()
         } catch (e) {
           const message = e instanceof Error ? e.message : 'Unknown render error'
           setError(message)
