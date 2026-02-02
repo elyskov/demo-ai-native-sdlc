@@ -33,11 +33,11 @@ export class DiagramCommandDto {
   @ApiProperty({
     description: 'Domain command name',
     example: 'create',
-    enum: ['create', 'update', 'delete', 'move', 'list-types', 'list-elements'],
+    enum: ['create', 'update', 'delete', 'move', 'list-types', 'list-elements', 'get-element'],
   })
   @IsString()
-  @IsIn(['create', 'update', 'delete', 'move', 'list-types', 'list-elements'])
-  command!: 'create' | 'update' | 'delete' | 'move' | 'list-types' | 'list-elements';
+  @IsIn(['create', 'update', 'delete', 'move', 'list-types', 'list-elements', 'get-element'])
+  command!: 'create' | 'update' | 'delete' | 'move' | 'list-types' | 'list-elements' | 'get-element';
 
   @ApiProperty({ description: 'Entity type', example: 'site' })
   @IsString()
