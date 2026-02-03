@@ -3,7 +3,6 @@ import {
   Inject,
   Injectable,
   Logger,
-  NotFoundException,
 } from '@nestjs/common';
 
 import { DiagramDomainStore } from '../diagrams/commands/diagram-domain.store';
@@ -74,7 +73,10 @@ export class CsvService {
     const dataset = await this.getDataset(diagramId);
     const element = dataset.elements.find((e) => e.type === type);
     if (!element) {
-      throw new NotFoundException(`CSV type '${type}' not found for diagram '${diagramId}'`);
+      const allowed = dataset.elements.map((e) => e.type).sort((a, b) => a.localeCompare(b));
+      throw new BadRequestException(
+        `Invalid type '${type}'. Allowed types for this diagram: ${allowed.join(', ')}`,
+      );
     }
 
     return { dataset, element };
