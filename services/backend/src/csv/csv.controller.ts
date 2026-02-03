@@ -7,6 +7,7 @@ import {
   Get,
   Logger,
   Param,
+  Query,
   Res,
 } from '@nestjs/common';
 import {
@@ -14,10 +15,11 @@ import {
   ApiNotFoundResponse,
   ApiOkResponse,
   ApiProduces,
+  ApiQuery,
   ApiTags,
 } from '@nestjs/swagger';
 
-import { CsvTypesResponse } from './models/csv.models';
+import { CsvOrderedTypesResponse } from './models/csv.models';
 import { CsvService } from './csv.service';
 
 function sanitizeFilenamePart(input: string): string {
@@ -92,11 +94,20 @@ export class CsvController {
   }
 
   @Get(':diagramId')
-  @ApiOkResponse({ type: CsvTypesResponse })
+  @ApiQuery({
+    name: 'category',
+    required: true,
+    description: 'Type category derived from NetBox model roots (e.g. Definitions, Infrastructure)',
+    example: 'Definitions',
+  })
+  @ApiOkResponse({ type: CsvOrderedTypesResponse })
   @ApiBadRequestResponse({ description: 'Invalid diagram id or generator output' })
   @ApiNotFoundResponse({ description: 'Diagram not found' })
-  async list(@Param('diagramId') diagramId: string): Promise<CsvTypesResponse> {
-    return this.csvService.listTypes(diagramId);
+  async list(
+    @Param('diagramId') diagramId: string,
+    @Query('category') category?: string,
+  ): Promise<CsvOrderedTypesResponse> {
+    return this.csvService.listOrderedTypes(diagramId, category);
   }
 
   @Get(':diagramId/:type')
