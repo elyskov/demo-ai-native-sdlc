@@ -34,3 +34,19 @@ export class CsvTypesResponse {
   })
   types!: string[];
 }
+
+export class CsvOrderedTypesResponse {
+  @ApiProperty({ example: 'hcqOn88HKnyHcHE6' })
+  diagramId!: string;
+
+  @ApiProperty({ example: 'Definitions', description: 'Requested type category' })
+  category!: string;
+
+  @ApiProperty({
+    description: 'Ordered NetBox entity types for the category and diagram',
+    example: ['tenant-group', 'tenant', 'site-group'],
+    isArray: true,
+    type: String,
+  })
+  types!: string[];
+}
