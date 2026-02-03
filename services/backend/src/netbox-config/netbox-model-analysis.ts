@@ -10,6 +10,8 @@ export type CategoryAnalysis = {
   dependencies: Record<string, string[]>;
 };
 
+export const GLOBAL_ROOT_KEY = '__global__';
+
 export function titleCaseCategory(rootKey: string): string {
   // Minimal, stable formatting for API categories.
   const words = rootKey
@@ -209,6 +211,41 @@ export function analyzeModelByRoot(model: NetboxModelConfig): Record<string, Cat
   }
 
   return result;
+}
+
+/**
+ * Analyzes dependencies across *all* entities (across roots) for deterministic ordering.
+ * Used for exports that must respect cross-root parent/link dependencies.
+ */
+export function analyzeModelGlobal(model: NetboxModelConfig): CategoryAnalysis {
+  const nodes = Object.keys(model.entities ?? {}).sort((a, b) => a.localeCompare(b));
+  const nodeSet = new Set(nodes);
+  const edges = buildCategoryDependencyEdges(model, nodeSet);
+
+  const { ordered, cycleNodes } = topoSortDeterministic(nodes, edges);
+  if (cycleNodes.length) {
+    throw new Error(
+      `NetBox model dependency cycle detected (global): ${cycleNodes.join(', ')}`,
+    );
+  }
+
+  const deps: Record<string, Set<string>> = {};
+  for (const n of nodes) deps[n] = new Set<string>();
+  for (const e of edges) {
+    deps[e.to]?.add(e.from);
+  }
+
+  return {
+    rootKey: GLOBAL_ROOT_KEY,
+    nodes,
+    ordered,
+    dependencies: Object.fromEntries(
+      Object.entries(deps).map(([k, v]) => [
+        k,
+        Array.from(v).sort((a, b) => a.localeCompare(b)),
+      ]),
+    ),
+  };
 }
 
 export function closureWithDependencies(analysis: CategoryAnalysis, seedTypes: Iterable<string>): Set<string> {

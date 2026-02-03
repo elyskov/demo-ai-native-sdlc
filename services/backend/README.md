@@ -16,6 +16,12 @@ REST endpoints (JSON):
 - `PUT /api/diagrams/:id`
 - `DELETE /api/diagrams/:id`
 
+## CSV Export API (NetBox)
+
+- `GET /api/csv/:diagramId?category=<Category>` → ordered NetBox entity types for a diagram/category (deterministic)
+- `GET /api/csv/:diagramId?type=<entity>` → single CSV export for one NetBox entity type
+- `GET /api/csv/:diagramId/zip` → ZIP archive containing numbered CSV files (`01__<entity>.csv`, ...)
+
 ## Domain Commands API (v1, backend-driven)
 
 The editor does not manipulate Mermaid directly. Instead, it sends domain commands to the backend, which validates them using YAML config and updates Mermaid deterministically by inserting/removing anchored blocks (Mermaid is never parsed).
