@@ -28,11 +28,18 @@ import {
   DropdownMenu,
   DropdownMenuContent,
   DropdownMenuItem,
+  DropdownMenuSeparator,
+  DropdownMenuSub,
+  DropdownMenuSubContent,
+  DropdownMenuSubTrigger,
   DropdownMenuTrigger,
 } from '@/components/ui/dropdown-menu';
 import { ScrollArea } from '@/components/ui/scroll-area';
 import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
+
+import { apiFetchJson } from '@/lib/backend';
+import { downloadViaFetch, safeFilename, slugifyFilenamePart } from '@/lib/download';
 
 type DiagramMetadata = {
   id: string;
@@ -42,6 +49,26 @@ type DiagramMetadata = {
 type DiagramsListProps = {
   diagrams: DiagramMetadata[];
 };
+
+type CsvOrderedTypesResponse = {
+  diagramId: string;
+  category: string;
+  types: string[];
+};
+
+type TypesLoadState =
+  | { status: 'idle' }
+  | { status: 'loading' }
+  | { status: 'error'; message: string }
+  | { status: 'ready'; types: string[] };
+
+function typesToMenuItems(state: TypesLoadState): { label: string; disabled: boolean; type?: string }[] {
+  if (state.status === 'loading') return [{ label: 'Loading...', disabled: true }];
+  if (state.status === 'error') return [{ label: 'Failed to load types', disabled: true }];
+  if (state.status === 'ready' && state.types.length === 0) return [{ label: 'No types found', disabled: true }];
+  if (state.status === 'ready') return state.types.map((t) => ({ label: t, disabled: false, type: t }));
+  return [{ label: 'Open to load...', disabled: true }];
+}
 
 export function DiagramsList({ diagrams }: DiagramsListProps) {
   const router = useRouter();
@@ -139,6 +166,29 @@ export function DiagramsList({ diagrams }: DiagramsListProps) {
     setDeleteDialogOpen(true);
   };
 
+  const fetchTypesForCategory = async (diagramId: string, category: 'Definitions' | 'Infrastructure'): Promise<string[]> => {
+    const res = await apiFetchJson<CsvOrderedTypesResponse>(
+      `/api/csv/${encodeURIComponent(diagramId)}?category=${encodeURIComponent(category)}`,
+      { method: 'GET' },
+    );
+    return Array.isArray(res.types) ? res.types : [];
+  };
+
+  const downloadZip = async (diagram: DiagramMetadata) => {
+    const slug = slugifyFilenamePart(diagram.name) || 'diagram';
+    const filename = safeFilename(`diagram-${slug}-csv.zip`, 'diagram-csv.zip');
+    await downloadViaFetch(`/api/csv/${encodeURIComponent(diagram.id)}/zip`, filename);
+  };
+
+  const downloadCsvType = async (diagram: DiagramMetadata, type: string) => {
+    const slug = slugifyFilenamePart(diagram.name) || 'diagram';
+    const filename = safeFilename(`diagram-${slug}-${type}.csv`, `diagram-${slug}.csv`);
+    await downloadViaFetch(
+      `/api/csv/${encodeURIComponent(diagram.id)}?type=${encodeURIComponent(type)}`,
+      filename,
+    );
+  };
+
   return (
     <div className="container max-w-4xl mx-auto py-8 px-4 min-h-[calc(100vh-120px)] flex flex-col">
       <div className="flex items-center justify-between mb-6">
@@ -215,6 +265,47 @@ export function DiagramsList({ diagrams }: DiagramsListProps) {
                       </Button>
                     </DropdownMenuTrigger>
                     <DropdownMenuContent align="end">
+                      {/* Download submenu */}
+                      <DropdownMenuSub>
+                        <DropdownMenuSubTrigger>
+                          Download
+                        </DropdownMenuSubTrigger>
+                        <DropdownMenuSubContent>
+                          <DropdownMenuItem
+                            onClick={async () => {
+                              try {
+                                await downloadZip(diagram);
+                              } catch (err) {
+                                console.error('Failed to download ZIP:', err);
+                                alert('Failed to download ZIP');
+                              }
+                            }}
+                          >
+                            All CSV files (ZIP)
+                          </DropdownMenuItem>
+
+                          <DropdownMenuSeparator />
+
+                          <CategorySubmenu
+                            label="Definitions"
+                            diagram={diagram}
+                            category="Definitions"
+                            fetchTypes={fetchTypesForCategory}
+                            onDownloadType={downloadCsvType}
+                          />
+
+                          <CategorySubmenu
+                            label="Infrastructure"
+                            diagram={diagram}
+                            category="Infrastructure"
+                            fetchTypes={fetchTypesForCategory}
+                            onDownloadType={downloadCsvType}
+                          />
+                        </DropdownMenuSubContent>
+                      </DropdownMenuSub>
+
+                      <DropdownMenuSeparator />
+
                       <DropdownMenuItem onClick={() => router.push(`/editor/${diagram.id}`)}>
                         Open
                       </DropdownMenuItem>
@@ -292,5 +383,60 @@ export function DiagramsList({ diagrams }: DiagramsListProps) {
         </AlertDialogContent>
       </AlertDialog>
     </div>
+  );
+}
+
+function CategorySubmenu(props: {
+  label: string;
+  diagram: { id: string; name: string };
+  category: 'Definitions' | 'Infrastructure';
+  fetchTypes: (diagramId: string, category: 'Definitions' | 'Infrastructure') => Promise<string[]>;
+  onDownloadType: (diagram: { id: string; name: string }, type: string) => Promise<void>;
+}) {
+  const [state, setState] = useState<TypesLoadState>({ status: 'idle' });
+
+  const ensureLoaded = async () => {
+    if (state.status === 'loading' || state.status === 'ready') return;
+    setState({ status: 'loading' });
+    try {
+      const types = await props.fetchTypes(props.diagram.id, props.category);
+      setState({ status: 'ready', types });
+    } catch (err) {
+      console.error(`Failed to load ${props.category} types:`, err);
+      setState({ status: 'error', message: String(err) });
+    }
+  };
+
+  return (
+    <DropdownMenuSub
+      onOpenChange={(open) => {
+        if (open) {
+          void ensureLoaded();
+        }
+      }}
+    >
+      <DropdownMenuSubTrigger>
+        {props.label}
+      </DropdownMenuSubTrigger>
+      <DropdownMenuSubContent>
+        {typesToMenuItems(state).map((item) => (
+          <DropdownMenuItem
+            key={item.label}
+            disabled={item.disabled}
+            onClick={async () => {
+              if (!item.type) return;
+              try {
+                await props.onDownloadType(props.diagram, item.type);
+              } catch (err) {
+                console.error('Failed to download CSV:', err);
+                alert('Failed to download CSV');
+              }
+            }}
+          >
+            {item.label}
+          </DropdownMenuItem>
+        ))}
+      </DropdownMenuSubContent>
+    </DropdownMenuSub>
   );
 }
