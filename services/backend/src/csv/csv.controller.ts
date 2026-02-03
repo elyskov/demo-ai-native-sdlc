@@ -41,10 +41,7 @@ export class CsvController {
 
   constructor(private readonly csvService: CsvService) {}
 
-  // IMPORTANT: Keep this route *before* `GET :diagramId`.
-  // Otherwise a request to `/api/csv/<id>.zip` would be captured by the generic
-  // `:diagramId` handler.
-  @Get(':diagramId.zip')
+  @Get(':diagramId/zip')
   @ApiProduces('application/zip')
   @ApiOkResponse({
     description: 'ZIP archive containing all CSV files for the diagram',
@@ -85,52 +82,52 @@ export class CsvController {
 
     archive.pipe(res);
 
-    for (const el of dataset.elements) {
-      const csvFilename = `${diagramName}_${el.type}.csv`;
+    dataset.elements.forEach((el, idx) => {
+      const n = String(idx + 1).padStart(2, '0');
+      const csvFilename = `${n}__${sanitizeFilenamePart(el.type)}.csv`;
       archive.append(el.csvContent, { name: csvFilename });
-    }
+    });
 
     await archive.finalize();
   }
 
   @Get(':diagramId')
   @ApiQuery({
+    name: 'type',
+    required: false,
+    description: 'NetBox entity type to export as a single CSV (e.g. site, device)',
+    example: 'site',
+  })
+  @ApiQuery({
     name: 'category',
-    required: true,
+    required: false,
     description: 'Type category derived from NetBox model roots (e.g. Definitions, Infrastructure)',
     example: 'Definitions',
   })
   @ApiOkResponse({ type: CsvOrderedTypesResponse })
   @ApiBadRequestResponse({ description: 'Invalid diagram id or generator output' })
   @ApiNotFoundResponse({ description: 'Diagram not found' })
-  async list(
+  async getOrList(
     @Param('diagramId') diagramId: string,
-    @Query('category') category?: string,
-  ): Promise<CsvOrderedTypesResponse> {
-    return this.csvService.listOrderedTypes(diagramId, category);
-  }
-
-  @Get(':diagramId/:type')
-  @ApiProduces('text/csv')
-  @ApiOkResponse({
-    description: 'Single CSV file download',
-    schema: { type: 'string', format: 'binary' },
-  })
-  @ApiBadRequestResponse({ description: 'Invalid diagram id/type or generator output' })
-  @ApiNotFoundResponse({ description: 'Diagram or type not found' })
-  async getCsv(
-    @Param('diagramId') diagramId: string,
-    @Param('type') type: string,
+    @Query('type') type: string | undefined,
     @Res() res: Response,
+    @Query('category') category?: string,
   ): Promise<void> {
-    const { dataset, element } = await this.csvService.getCsvElement(diagramId, type);
+    if (typeof type === 'string' && type.trim()) {
+      const { dataset, element } = await this.csvService.getCsvElement(diagramId, type.trim());
 
-    const diagramName = sanitizeFilenamePart(dataset.diagramName);
-    const csvFilename = `${diagramName}_${element.type}.csv`;
+      const diagramName = sanitizeFilenamePart(dataset.diagramName);
+      const csvFilename = `${diagramName}__${sanitizeFilenamePart(element.type)}.csv`;
 
-    res.status(200);
-    res.setHeader('Content-Type', 'text/csv; charset=utf-8');
-    res.setHeader('Content-Disposition', contentDispositionAttachment(csvFilename));
-    res.send(element.csvContent);
+      res.status(200);
+      res.setHeader('Content-Type', 'text/csv; charset=utf-8');
+      res.setHeader('Content-Disposition', contentDispositionAttachment(csvFilename));
+      res.send(element.csvContent);
+      return;
+    }
+
+    const payload = await this.csvService.listOrderedTypes(diagramId, category);
+    res.status(200).json(payload);
+    return;
   }
 }

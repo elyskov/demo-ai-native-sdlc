@@ -3,6 +3,7 @@ import { Injectable, Logger, OnApplicationBootstrap } from '@nestjs/common';
 import type { NetboxModelConfig } from './netbox-config.models';
 import { NetboxModelService } from './netbox-model.service';
 import {
+  analyzeModelGlobal,
   analyzeModelByRoot,
   closureWithDependencies,
   normalizeCategoryInput,
@@ -22,6 +23,7 @@ export class NetboxModelAnalysisService implements OnApplicationBootstrap {
   private model!: NetboxModelConfig;
   private analysesByRootKey: Record<string, CategoryAnalysis> = {};
   private categories: CsvCategory[] = [];
+  private globalAnalysis!: CategoryAnalysis;
 
   constructor(private readonly modelService: NetboxModelService) {}
 
@@ -29,6 +31,7 @@ export class NetboxModelAnalysisService implements OnApplicationBootstrap {
     this.model = this.modelService.get();
 
     this.analysesByRootKey = analyzeModelByRoot(this.model);
+    this.globalAnalysis = analyzeModelGlobal(this.model);
 
     this.categories = Object.keys(this.analysesByRootKey)
       .sort((a, b) => a.localeCompare(b))
@@ -83,5 +86,13 @@ export class NetboxModelAnalysisService implements OnApplicationBootstrap {
   getNeededTypesForRoot(rootKey: string, seedTypes: Iterable<string>): Set<string> {
     const analysis = this.getAnalysisForRoot(rootKey);
     return closureWithDependencies(analysis, seedTypes);
+  }
+
+  getGlobalOrderedTypes(): string[] {
+    return this.globalAnalysis.ordered.slice();
+  }
+
+  getGlobalNeededTypes(seedTypes: Iterable<string>): Set<string> {
+    return closureWithDependencies(this.globalAnalysis, seedTypes);
   }
 }
