@@ -6,7 +6,9 @@ import {
   NotFoundException,
 } from '@nestjs/common';
 
+import { DiagramDomainStore } from '../diagrams/commands/diagram-domain.store';
 import { DiagramsService } from '../diagrams/diagrams.service';
+import { NetboxModelAnalysisService } from '../netbox-config/netbox-model-analysis.service';
 import type { CsvDataset, CsvElement } from './models/csv.models';
 import { CSV_DATASET_GENERATOR } from './csv.generator';
 import type { CsvDatasetGenerator } from './csv.generator';
@@ -19,15 +21,48 @@ export class CsvService {
 
   constructor(
     private readonly diagramsService: DiagramsService,
+    private readonly domainStore: DiagramDomainStore,
+    private readonly modelAnalysis: NetboxModelAnalysisService,
     @Inject(CSV_DATASET_GENERATOR) private readonly generator: CsvDatasetGenerator,
   ) {}
 
-  async listTypes(diagramId: string): Promise<{ diagramId: string; diagramName: string; types: string[] }> {
-    const dataset = await this.getDataset(diagramId);
+  async listOrderedTypes(
+    diagramId: string,
+    category?: string,
+  ): Promise<{ diagramId: string; category: string; types: string[] }> {
+    if (typeof category !== 'string' || !category.trim()) {
+      const allowed = this.modelAnalysis.getAllowedCategories();
+      throw new BadRequestException(
+        `Query parameter 'category' is required. Allowed categories: ${allowed.join(', ')}`,
+      );
+    }
+
+    const rootKey = this.modelAnalysis.resolveRootKeyFromCategory(category);
+    if (!rootKey) {
+      const allowed = this.modelAnalysis.getAllowedCategories();
+      throw new BadRequestException(
+        `Invalid category '${category}'. Allowed categories: ${allowed.join(', ')}`,
+      );
+    }
+
+    // Ensures unknown diagramId returns 404.
+    const diagram = await this.diagramsService.get(diagramId);
+
+    const state = await this.domainStore.load(diagramId);
+    const presentTypes = new Set(
+      state.objects
+        .map((o) => (o && typeof o.entity === 'string' ? o.entity : ''))
+        .filter((v) => Boolean(v)),
+    );
+
+    // Include dependencies (within the category) for the types present in the diagram.
+    const needed = this.modelAnalysis.getNeededTypesForRoot(rootKey, presentTypes);
+    const ordered = this.modelAnalysis.getOrderedTypesForRoot(rootKey);
+
     return {
-      diagramId: dataset.diagramId,
-      diagramName: dataset.diagramName,
-      types: dataset.elements.map((e) => e.type).sort(),
+      diagramId: diagram.id,
+      category: this.modelAnalysis.getCategoryNameForRoot(rootKey),
+      types: ordered.filter((t) => needed.has(t)),
     };
   }
 

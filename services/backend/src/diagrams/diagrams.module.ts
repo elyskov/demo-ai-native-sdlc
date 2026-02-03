@@ -13,6 +13,6 @@ import { MermaidGeneratorService } from './mermaid/mermaid-generator.service';
   imports: [NetboxConfigModule],
   controllers: [DiagramsController, DiagramsCommandsController],
   providers: [DiagramsService, MermaidGeneratorService, DiagramDomainStore, DiagramsCommandsService],
-  exports: [DiagramsService],
+  exports: [DiagramsService, DiagramDomainStore],
 })
 export class DiagramsModule {}
