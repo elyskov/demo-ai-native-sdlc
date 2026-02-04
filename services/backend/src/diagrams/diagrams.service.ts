@@ -49,10 +49,33 @@ export class DiagramsService implements OnModuleInit {
     await ensureDir(this.diagramsDir);
     await this.loadIndex();
 
-    // Seed sample diagrams if empty
-    if (this.metadataById.size === 0) {
-      await this.seedSampleDiagrams();
+    const seedEnabled = String(process.env.SEED_SAMPLE_DIAGRAMS ?? '')
+      .trim()
+      .toLowerCase() === 'true';
+
+    // Seed sample diagrams only when explicitly enabled.
+    if (!seedEnabled) {
+      if (this.metadataById.size === 0) {
+        this.logger.log(
+          `Sample diagram seeding is disabled (set SEED_SAMPLE_DIAGRAMS=true to enable). Storage is empty; continuing without seeding.`,
+        );
+      } else {
+        this.logger.log(`Sample diagram seeding is disabled (SEED_SAMPLE_DIAGRAMS!=true).`);
+      }
+      return;
     }
+
+    if (this.metadataById.size > 0) {
+      this.logger.log(
+        `Sample diagram seeding is enabled (SEED_SAMPLE_DIAGRAMS=true) but storage is not empty; skipping seeding.`,
+      );
+      return;
+    }
+
+    this.logger.log(
+      `Sample diagram seeding is enabled (SEED_SAMPLE_DIAGRAMS=true) and storage is empty; seeding now.`,
+    );
+    await this.seedSampleDiagrams();
   }
 
   private async seedSampleDiagrams(): Promise<void> {

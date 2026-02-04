@@ -26,6 +26,52 @@ export class DiagramDomainStore {
   private readonly logger = new Logger(DiagramDomainStore.name);
   private readonly diagramsDir = process.env.DIAGRAMS_DIR ?? '/app/diagrams';
 
+  private parseParentRef(value: unknown, ctx: { diagramId: string; objectId: string; entity: string }): DomainParentRef {
+    if (!value || typeof value !== 'object' || Array.isArray(value)) {
+      throw new Error(
+        `Invalid parent for '${ctx.entity}:${ctx.objectId}' in diagram '${ctx.diagramId}' (expected an object)`,
+      );
+    }
+
+    const v = value as any;
+
+    const hasRoot = Object.prototype.hasOwnProperty.call(v, 'root');
+    const hasEntity = Object.prototype.hasOwnProperty.call(v, 'entity');
+    const hasId = Object.prototype.hasOwnProperty.call(v, 'id');
+
+    // Disallow ambiguous shapes (e.g. both root and entity/id).
+    if (hasRoot && (hasEntity || hasId)) {
+      throw new Error(
+        `Invalid parent for '${ctx.entity}:${ctx.objectId}' in diagram '${ctx.diagramId}' (cannot combine root with entity/id)`,
+      );
+    }
+
+    if (hasRoot) {
+      const root = typeof v.root === 'string' ? v.root.trim() : '';
+      if (root !== 'definitions' && root !== 'infrastructure') {
+        throw new Error(
+          `Invalid parent.root '${String(v.root)}' for '${ctx.entity}:${ctx.objectId}' in diagram '${ctx.diagramId}'`,
+        );
+      }
+      return { root };
+    }
+
+    if (hasEntity || hasId) {
+      const entity = typeof v.entity === 'string' ? v.entity.trim() : '';
+      const id = typeof v.id === 'string' ? v.id.trim() : '';
+      if (!entity || !id) {
+        throw new Error(
+          `Invalid parent for '${ctx.entity}:${ctx.objectId}' in diagram '${ctx.diagramId}' (expected non-empty entity and id)`,
+        );
+      }
+      return { entity, id };
+    }
+
+    throw new Error(
+      `Invalid parent for '${ctx.entity}:${ctx.objectId}' in diagram '${ctx.diagramId}' (expected root or entity/id reference)`,
+    );
+  }
+
   async load(diagramId: string): Promise<DiagramDomainState> {
     await ensureDir(this.diagramsDir);
 
@@ -45,16 +91,25 @@ export class DiagramDomainStore {
         version: 1,
         objects: objects
           .filter((o) => o && typeof o.id === 'string' && typeof o.entity === 'string')
-          .map((o) => ({
-            id: String(o.id),
-            entity: String(o.entity),
-            parent: (o as any).parent,
-            attributes: typeof (o as any).attributes === 'object' && (o as any).attributes ? (o as any).attributes : {},
-          })),
+          .map((o) => {
+            const objectId = String(o.id);
+            const entity = String(o.entity);
+            const parent = this.parseParentRef((o as any).parent, { diagramId, objectId, entity });
+            const attributes =
+              typeof (o as any).attributes === 'object' && (o as any).attributes
+                ? (o as any).attributes
+                : {};
+
+            return { id: objectId, entity, parent, attributes };
+          }),
       };
     } catch (err) {
-      this.logger.error(`Failed to load domain state for diagram '${diagramId}'`, (err as any)?.stack);
-      throw new BadRequestException('Corrupt diagram domain state');
+      const msg = (err as any)?.message ? String((err as any).message) : String(err);
+      this.logger.error(
+        `Failed to load domain state for diagram '${diagramId}': ${msg}`,
+        (err as any)?.stack,
+      );
+      throw new BadRequestException(`Corrupt diagram domain state: ${msg}`);
     }
   }
 
