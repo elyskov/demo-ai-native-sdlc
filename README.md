@@ -33,39 +33,12 @@ Prerequisites
 - Node.js (LTS recommended)
 - Docker & Docker Compose (for local container workflows)
 
-Backend (Nest.js)
-----------------
+Installation / Running
+----------------------
 
-The backend lives in `services/backend`.
+See INSTALL.md for:
 
-Run with Docker (image)
-~~~~~~~~~~~~~~~~~~~~~~
-
-- Build: `docker build -t demo-ai-native-sdlc-backend:local ./services/backend`
-- Run: `docker run --rm -p 3000:3000 -e APP_ENV=local -e APP_NAME=demo-ai-native-sdlc-backend demo-ai-native-sdlc-backend:local`
-
-Run with Docker Compose
-~~~~~~~~~~~~~~~~~~~~~~~
-
-- Start: `docker compose up --build`
-
-Check locally
-~~~~~~~~~~~~~
-
-- Health endpoint: http://localhost:3000/health
-
-Frontend (Next.js)
-------------------
-
-The frontend lives in `services/frontend` and uses the Next.js App Router.
-
-Run with Docker Compose
-~~~~~~~~~~~~~~~~~~~~~~~
-
-- Start: `docker compose up --build`
-
-Check locally
-~~~~~~~~~~~~~
-
-- Frontend: http://localhost:3001
-- Backend: http://localhost:3000
+- Local development (Docker images + Docker Compose)
+- Local verification URLs (health, Swagger, frontend)
+- CI pipeline behavior (Docker publish)
+- Production run via docker-compose.prod.yml
