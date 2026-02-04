@@ -2,6 +2,17 @@
 
 Minimal Nest.js REST API for demo-ai-native-sdlc.
 
+## Environment variables
+
+- `PORT` (default: `3000`)
+- `APP_NAME` / `APP_ENV` (used by health endpoints)
+- `DIAGRAMS_DIR` (default: `/app/diagrams`) — filesystem storage for Mermaid (`.mmd`) and domain state (`.domain.json`).
+- `SEED_SAMPLE_DIAGRAMS` (default: disabled) — when set to `true`, seeds sample diagrams on startup only if diagram storage is empty.
+- `NETBOX_CONFIG_DIR` (default: `<cwd>/config`) — directory containing YAML config:
+	- `netbox-model.yaml` (required)
+	- `netbox-to-mermaid.yaml` (required)
+	- `mermaid-styles.yaml` (optional; if missing, styling is skipped)
+
 ## Endpoints
 
 - `GET /health` → returns JSON with application name, environment, Nest.js version, Node.js version.
