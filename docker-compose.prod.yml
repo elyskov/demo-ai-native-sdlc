@@ -1,0 +1,25 @@
+services:
+  backend:
+    image: "${DOCKERHUB_USERNAME:-elyskov}/${DOCKERHUB_REPOSITORY:-demo-ai-native-sdlc}:backend-${IMAGE_TAG:-mvp}"
+    ports:
+      - "3000:3000"
+    environment:
+      PORT: "3000"
+      APP_NAME: "demo-ai-native-sdlc-backend"
+      APP_ENV: "production"
+      NODE_ENV: "production"
+    volumes:
+      - backend_diagrams:/app/diagrams
+
+  frontend:
+    image: "${DOCKERHUB_USERNAME:-elyskov}/${DOCKERHUB_REPOSITORY:-demo-ai-native-sdlc}:frontend-${IMAGE_TAG:-mvp}"
+    ports:
+      - "3001:3000"
+    environment:
+      NODE_ENV: "production"
+      NEXT_PUBLIC_API_BASE_URL: "http://backend:3000"
+    depends_on:
+      - backend
+
+volumes:
+  backend_diagrams:
