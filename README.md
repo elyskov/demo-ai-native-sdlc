@@ -23,7 +23,7 @@ Technology stack
 Application (MVP)
 -----------------
 
-The application is a minimal web MVP that allows users to visually create and update C4 deployment diagrams (rendered with Mermaid) and export generated inventory data as CSV files usable by NetBox.
+The application is a minimal web MVP that allows users to visually create and update specific Flowchart diagrams (rendered with Mermaid) and export generated inventory data as CSV files usable by NetBox.
 
 Prerequisites
 -------------
