@@ -1,6 +1,6 @@
 import type { CsvDataset } from './models/csv.models';
 
-export const CSV_DATASET_GENERATOR = 'CSV_DATASET_GENERATOR';
+export const CSV_DATASET_GENERATOR = Symbol('CSV_DATASET_GENERATOR');
 
 export interface CsvDatasetGenerator {
   generate(input: {
