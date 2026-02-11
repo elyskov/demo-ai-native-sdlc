@@ -1,0 +1,386 @@
+{
+  "info": {
+    "name": "Frontend Proxy Tests",
+    "description": "API tests verifying the Next.js proxy rewrite layer for the demo-ai-native-sdlc frontend service. Requests go through the frontend (port 3001) and are proxied to the backend.\n\nRequires: Full docker-compose stack running (frontend on {{frontend_base_url}}, backend on port 3000).",
+    "schema": "https://schema.getpostman.com/json/collection/v2.1.0/collection.json"
+  },
+  "event": [
+    {
+      "listen": "test",
+      "script": {
+        "type": "text/javascript",
+        "exec": [
+          "pm.test('Response time is acceptable', function () {",
+          "    pm.expect(pm.response.responseTime).to.be.below(5000);",
+          "});"
+        ]
+      }
+    }
+  ],
+  "variable": [
+    { "key": "diagram_id", "value": "", "description": "Auto-set by Create Diagram test" }
+  ],
+  "item": [
+    {
+      "name": "Health",
+      "description": "Health check through frontend proxy",
+      "item": [
+        {
+          "name": "Proxy: Health Check",
+          "request": {
+            "method": "GET",
+            "header": [],
+            "url": {
+              "raw": "{{frontend_base_url}}/api/health",
+              "host": ["{{frontend_base_url}}"],
+              "path": ["api", "health"]
+            }
+          },
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test('Status code is 200', function () {",
+                  "    pm.response.to.have.status(200);",
+                  "});",
+                  "",
+                  "pm.test('Response has required health fields (proxied)', function () {",
+                  "    const body = pm.response.json();",
+                  "    pm.expect(body).to.have.property('name');",
+                  "    pm.expect(body).to.have.property('environment');",
+                  "    pm.expect(body).to.have.property('nestVersion');",
+                  "    pm.expect(body).to.have.property('nodeVersion');",
+                  "});"
+                ]
+              }
+            }
+          ]
+        }
+      ]
+    },
+    {
+      "name": "Diagrams CRUD",
+      "description": "Diagram lifecycle through the frontend proxy",
+      "item": [
+        {
+          "name": "Proxy: List Diagrams",
+          "request": {
+            "method": "GET",
+            "header": [],
+            "url": {
+              "raw": "{{frontend_base_url}}/api/diagrams",
+              "host": ["{{frontend_base_url}}"],
+              "path": ["api", "diagrams"]
+            }
+          },
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test('Status code is 200', function () {",
+                  "    pm.response.to.have.status(200);",
+                  "});",
+                  "",
+                  "pm.test('Response is an array', function () {",
+                  "    const body = pm.response.json();",
+                  "    pm.expect(body).to.be.an('array');",
+                  "});"
+                ]
+              }
+            }
+          ]
+        },
+        {
+          "name": "Proxy: Create Diagram",
+          "request": {
+            "method": "POST",
+            "header": [{ "key": "Content-Type", "value": "application/json" }],
+            "body": {
+              "mode": "raw",
+              "raw": "{\"name\": \"Proxy Test Diagram\"}"
+            },
+            "url": {
+              "raw": "{{frontend_base_url}}/api/diagrams",
+              "host": ["{{frontend_base_url}}"],
+              "path": ["api", "diagrams"]
+            }
+          },
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test('Status code is 201', function () {",
+                  "    pm.response.to.have.status(201);",
+                  "});",
+                  "",
+                  "pm.test('Diagram created through proxy', function () {",
+                  "    const body = pm.response.json();",
+                  "    pm.expect(body).to.have.property('id');",
+                  "    pm.expect(body).to.have.property('name', 'Proxy Test Diagram');",
+                  "    pm.expect(body).to.have.property('content');",
+                  "",
+                  "    pm.collectionVariables.set('diagram_id', body.id);",
+                  "});"
+                ]
+              }
+            }
+          ]
+        },
+        {
+          "name": "Proxy: Get Diagram",
+          "request": {
+            "method": "GET",
+            "header": [],
+            "url": {
+              "raw": "{{frontend_base_url}}/api/diagrams/{{diagram_id}}",
+              "host": ["{{frontend_base_url}}"],
+              "path": ["api", "diagrams", "{{diagram_id}}"]
+            }
+          },
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test('Status code is 200', function () {",
+                  "    pm.response.to.have.status(200);",
+                  "});",
+                  "",
+                  "pm.test('Diagram retrieved through proxy', function () {",
+                  "    const body = pm.response.json();",
+                  "    pm.expect(body.id).to.eql(pm.collectionVariables.get('diagram_id'));",
+                  "    pm.expect(body).to.have.property('name');",
+                  "    pm.expect(body).to.have.property('content');",
+                  "});"
+                ]
+              }
+            }
+          ]
+        },
+        {
+          "name": "Proxy: Rename Diagram (PATCH)",
+          "request": {
+            "method": "PATCH",
+            "header": [{ "key": "Content-Type", "value": "application/json" }],
+            "body": {
+              "mode": "raw",
+              "raw": "{\"name\": \"Proxy Renamed Diagram\"}"
+            },
+            "url": {
+              "raw": "{{frontend_base_url}}/api/diagrams/{{diagram_id}}",
+              "host": ["{{frontend_base_url}}"],
+              "path": ["api", "diagrams", "{{diagram_id}}"]
+            }
+          },
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test('Status code is 200', function () {",
+                  "    pm.response.to.have.status(200);",
+                  "});",
+                  "",
+                  "pm.test('Name updated through proxy', function () {",
+                  "    const body = pm.response.json();",
+                  "    pm.expect(body.name).to.eql('Proxy Renamed Diagram');",
+                  "});"
+                ]
+              }
+            }
+          ]
+        }
+      ]
+    },
+    {
+      "name": "Diagram Commands",
+      "description": "Command endpoint through the frontend proxy",
+      "item": [
+        {
+          "name": "Proxy: List Types (infrastructure)",
+          "request": {
+            "method": "POST",
+            "header": [{ "key": "Content-Type", "value": "application/json" }],
+            "body": {
+              "mode": "raw",
+              "raw": "{\"command\": \"list-types\", \"entity\": \"infrastructure\", \"parent\": {\"root\": \"infrastructure\"}}"
+            },
+            "url": {
+              "raw": "{{frontend_base_url}}/api/diagrams/{{diagram_id}}/commands",
+              "host": ["{{frontend_base_url}}"],
+              "path": ["api", "diagrams", "{{diagram_id}}", "commands"]
+            }
+          },
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test('Status code is 201', function () {",
+                  "    pm.response.to.have.status(201);",
+                  "});",
+                  "",
+                  "pm.test('Types returned through proxy', function () {",
+                  "    const body = pm.response.json();",
+                  "    pm.expect(body).to.have.property('types');",
+                  "    pm.expect(body.types).to.be.an('array');",
+                  "    pm.expect(body.types.length).to.be.above(0);",
+                  "});"
+                ]
+              }
+            }
+          ]
+        },
+        {
+          "name": "Proxy: Create Entity (region)",
+          "request": {
+            "method": "POST",
+            "header": [{ "key": "Content-Type", "value": "application/json" }],
+            "body": {
+              "mode": "raw",
+              "raw": "{\"command\": \"create\", \"entity\": \"region\", \"parent\": {\"root\": \"infrastructure\"}, \"attributes\": {\"name\": \"Proxy Test Region\", \"slug\": \"proxy-test-region\"}}"
+            },
+            "url": {
+              "raw": "{{frontend_base_url}}/api/diagrams/{{diagram_id}}/commands",
+              "host": ["{{frontend_base_url}}"],
+              "path": ["api", "diagrams", "{{diagram_id}}", "commands"]
+            }
+          },
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test('Status code is 201', function () {",
+                  "    pm.response.to.have.status(201);",
+                  "});",
+                  "",
+                  "pm.test('Entity created through proxy', function () {",
+                  "    const body = pm.response.json();",
+                  "    pm.expect(body.content).to.include('Proxy Test Region');",
+                  "});"
+                ]
+              }
+            }
+          ]
+        }
+      ]
+    },
+    {
+      "name": "CSV Export",
+      "description": "CSV export through frontend proxy",
+      "item": [
+        {
+          "name": "Proxy: List CSV Types",
+          "request": {
+            "method": "GET",
+            "header": [],
+            "url": {
+              "raw": "{{frontend_base_url}}/api/csv/{{diagram_id}}?category=Infrastructure",
+              "host": ["{{frontend_base_url}}"],
+              "path": ["api", "csv", "{{diagram_id}}"],
+              "query": [{ "key": "category", "value": "Infrastructure" }]
+            }
+          },
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test('Status code is 200', function () {",
+                  "    pm.response.to.have.status(200);",
+                  "});",
+                  "",
+                  "pm.test('CSV types returned through proxy', function () {",
+                  "    const body = pm.response.json();",
+                  "    pm.expect(body).to.have.property('diagramId');",
+                  "    pm.expect(body).to.have.property('category', 'Infrastructure');",
+                  "    pm.expect(body).to.have.property('types');",
+                  "});"
+                ]
+              }
+            }
+          ]
+        },
+        {
+          "name": "Proxy: Download CSV ZIP",
+          "request": {
+            "method": "GET",
+            "header": [],
+            "url": {
+              "raw": "{{frontend_base_url}}/api/csv/{{diagram_id}}/zip",
+              "host": ["{{frontend_base_url}}"],
+              "path": ["api", "csv", "{{diagram_id}}", "zip"]
+            }
+          },
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test('Status code is 200', function () {",
+                  "    pm.response.to.have.status(200);",
+                  "});",
+                  "",
+                  "pm.test('ZIP returned through proxy', function () {",
+                  "    pm.expect(pm.response.headers.get('Content-Type')).to.include('application/zip');",
+                  "});"
+                ]
+              }
+            }
+          ]
+        }
+      ]
+    },
+    {
+      "name": "Cleanup",
+      "description": "Remove test data",
+      "item": [
+        {
+          "name": "Proxy: Delete Test Diagram",
+          "request": {
+            "method": "DELETE",
+            "header": [],
+            "url": {
+              "raw": "{{frontend_base_url}}/api/diagrams/{{diagram_id}}",
+              "host": ["{{frontend_base_url}}"],
+              "path": ["api", "diagrams", "{{diagram_id}}"]
+            }
+          },
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test('Status code is 200', function () {",
+                  "    pm.response.to.have.status(200);",
+                  "});",
+                  "",
+                  "pm.test('Diagram deleted through proxy', function () {",
+                  "    const body = pm.response.json();",
+                  "    pm.expect(body).to.have.property('id', pm.collectionVariables.get('diagram_id'));",
+                  "});",
+                  "",
+                  "pm.collectionVariables.set('diagram_id', '');"
+                ]
+              }
+            }
+          ]
+        }
+      ]
+    }
+  ]
+}
