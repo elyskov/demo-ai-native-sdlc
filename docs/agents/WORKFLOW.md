@@ -35,6 +35,7 @@ Examples:
 
 - Prefer incremental, easy-to-review commits.
 - Use clear, imperative commit messages (for example `docs: add agents governance`).
+- PRs should be linked to the corresponding GitHub issue and include a closing keyword line in the description (for example `Closes #42`).
 - In PRs, document:
   - Scope / non-goals
   - How you tested (unit/integration and/or Postman/Newman when relevant)
