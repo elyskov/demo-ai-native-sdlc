@@ -205,7 +205,7 @@ export function DiagramsList({ diagrams }: DiagramsListProps) {
             <DialogHeader>
               <DialogTitle>Create New Diagram</DialogTitle>
               <DialogDescription>
-                Enter a name for your new C4 deployment diagram.
+                Enter a name for your new Flowchart diagram.
               </DialogDescription>
             </DialogHeader>
             <div className="grid gap-4 py-4">
