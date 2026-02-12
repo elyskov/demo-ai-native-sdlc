@@ -17,7 +17,7 @@ Technology stack
 
 - Nest.js — backend services and APIs
 - Next.js — frontend and server-side rendering
-- Mermaid.js — visual diagrams (C4 / deployment views)
+- Mermaid.js — visual diagrams (Flowchart diagrams)
 - Docker — containerization and local deployment
 
 Application (MVP)
