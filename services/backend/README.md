@@ -6,7 +6,8 @@ Minimal Nest.js REST API for demo-ai-native-sdlc.
 
 - `PORT` (default: `3000`)
 - `APP_NAME` / `APP_ENV` (used by health endpoints)
-- `DIAGRAMS_DIR` (default: `/app/diagrams`) — filesystem storage for Mermaid (`.mmd`) and domain state (`.domain.json`).
+- `MONGO_URI` (required) — MongoDB connection string (for Docker Compose: `mongodb://mongo:27017/demo_ai_native_sdlc`).
+- `MONGO_DB_NAME` (default: `demo_ai_native_sdlc`) — database name.
 - `SEED_SAMPLE_DIAGRAMS` (default: disabled) — when set to `true`, seeds sample diagrams on startup only if diagram storage is empty.
 - `NETBOX_CONFIG_DIR` (default: `<cwd>/config`) — directory containing YAML config:
 	- `netbox-model.yaml` (required)

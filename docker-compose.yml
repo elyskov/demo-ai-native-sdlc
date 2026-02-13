@@ -1,4 +1,11 @@
 services:
+  mongo:
+    image: mongo:7
+    ports:
+      - "27017:27017"
+    volumes:
+      - mongo_data:/data/db
+
   backend:
     build:
       context: ./services/backend
@@ -10,8 +17,10 @@ services:
       APP_NAME: "demo-ai-native-sdlc-backend"
       APP_ENV: "local"
       NODE_ENV: "production"
-    volumes:
-      - backend_diagrams:/app/diagrams
+      MONGO_URI: "mongodb://mongo:27017/demo_ai_native_sdlc"
+      MONGO_DB_NAME: "demo_ai_native_sdlc"
+    depends_on:
+      - mongo
 
   frontend:
     build:
@@ -25,5 +34,18 @@ services:
     depends_on:
       - backend
 
+  backend-tests:
+    build:
+      context: ./services/backend
+      dockerfile: Dockerfile
+      target: test
+    environment:
+      APP_ENV: "test"
+      NODE_ENV: "test"
+      MONGO_URI: "mongodb://mongo:27017/demo_ai_native_sdlc_test"
+      MONGO_DB_NAME: "demo_ai_native_sdlc_test"
+    depends_on:
+      - mongo
+
 volumes:
-  backend_diagrams:
+  mongo_data:
