@@ -2,6 +2,7 @@ import * as assert from 'node:assert/strict';
 import { promises as fs } from 'node:fs';
 import * as os from 'node:os';
 import * as path from 'node:path';
+import { MongoClient } from 'mongodb';
 
 import { DiagramDomainStore } from '../src/diagrams/commands/diagram-domain.store';
 import { NetboxConfigService } from '../src/netbox-config/netbox-config.service';
@@ -15,91 +16,82 @@ async function withTempDir(fn: (dir: string) => Promise<void>) {
   }
 }
 
-async function testDomainStoreRejectsInvalidParent() {
-  const prev = process.env.DIAGRAMS_DIR;
+async function withMongo(fn: (ctx: { client: MongoClient; dbName: string }) => Promise<void>) {
+  const uri = String(process.env.MONGO_URI ?? '').trim();
+  const dbName = String(process.env.MONGO_DB_NAME ?? '').trim();
+  if (!uri || !dbName) {
+    throw new Error('MONGO_URI and MONGO_DB_NAME are required for tests (run via Docker Compose)');
+  }
 
-  await withTempDir(async (dir) => {
-    process.env.DIAGRAMS_DIR = dir;
+  const client = new MongoClient(uri);
+  await client.connect();
+  try {
+    await fn({ client, dbName });
+  } finally {
+    await client.close();
+  }
+}
+
+async function testDomainStoreRejectsInvalidParent() {
+  await withMongo(async ({ client, dbName }) => {
+    const db = client.db(dbName);
+    const domains = db.collection('diagram_domains');
+    await domains.deleteMany({});
 
     const diagramId = 'd1';
-    const filePath = path.join(dir, `${diagramId}.domain.json`);
-
-    await fs.writeFile(
-      filePath,
-      JSON.stringify(
+    await domains.insertOne({
+      _id: diagramId,
+      version: 1,
+      objects: [
         {
-          version: 1,
-          objects: [
-            {
-              id: 'o1',
-              entity: 'region',
-              parent: { foo: 'bar' },
-              attributes: {},
-            },
-          ],
+          id: 'o1',
+          entity: 'region',
+          parent: { foo: 'bar' },
+          attributes: {},
         },
-        null,
-        2,
-      ),
-      'utf8',
-    );
+      ],
+      updatedAt: new Date(),
+    });
 
-    const store = new DiagramDomainStore();
-    await assert.rejects(
-      () => store.load(diagramId),
-      /Corrupt diagram domain state/i,
-    );
+    const store = new DiagramDomainStore(db as any);
+    await assert.rejects(() => store.load(diagramId), /Corrupt diagram domain state/i);
   });
-
-  if (prev === undefined) delete process.env.DIAGRAMS_DIR;
-  else process.env.DIAGRAMS_DIR = prev;
 }
 
 async function testDomainStoreNormalizesParent() {
-  const prev = process.env.DIAGRAMS_DIR;
-
-  await withTempDir(async (dir) => {
-    process.env.DIAGRAMS_DIR = dir;
+  await withMongo(async ({ client, dbName }) => {
+    const db = client.db(dbName);
+    const domains = db.collection('diagram_domains');
+    await domains.deleteMany({});
 
     const diagramId = 'd2';
-    const filePath = path.join(dir, `${diagramId}.domain.json`);
-
-    await fs.writeFile(
-      filePath,
-      JSON.stringify(
+    await domains.insertOne({
+      _id: diagramId,
+      version: 1,
+      objects: [
         {
-          version: 1,
-          objects: [
-            {
-              id: 'o1',
-              entity: 'site',
-              parent: { entity: ' region ', id: ' r1 ' },
-              attributes: { name: 'Site 1' },
-            },
-            {
-              id: 'o2',
-              entity: 'tenant',
-              parent: { root: 'definitions' },
-              attributes: {},
-            },
-          ],
+          id: 'o1',
+          entity: 'site',
+          parent: { entity: ' region ', id: ' r1 ' },
+          attributes: { name: 'Site 1' },
         },
-        null,
-        2,
-      ),
-      'utf8',
-    );
+        {
+          id: 'o2',
+          entity: 'tenant',
+          parent: { root: 'definitions' },
+          attributes: {},
+        },
+      ],
+      updatedAt: new Date(),
+    });
 
-    const store = new DiagramDomainStore();
+    const store = new DiagramDomainStore(db as any);
     const state = await store.load(diagramId);
 
     assert.equal(state.objects.length, 2);
     assert.deepEqual(state.objects[0].parent, { entity: 'region', id: 'r1' });
     assert.deepEqual(state.objects[1].parent, { root: 'definitions' });
   });
-
-  if (prev === undefined) delete process.env.DIAGRAMS_DIR;
-  else process.env.DIAGRAMS_DIR = prev;
 }
 
 async function testNetboxConfigAllowsMissingStyles() {

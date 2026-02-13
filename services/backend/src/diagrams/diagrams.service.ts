@@ -1,17 +1,17 @@
 import {
   BadRequestException,
+  Inject,
   Injectable,
   Logger,
   NotFoundException,
   OnModuleInit,
 } from '@nestjs/common';
 import { randomBytes } from 'node:crypto';
-import { promises as fs } from 'node:fs';
-import * as path from 'node:path';
-
-import { atomicWriteFile, ensureDir, fileExists } from '../shared/fs-utils';
+import type { Collection, Db } from 'mongodb';
 
 import { MermaidGeneratorService } from './mermaid/mermaid-generator.service';
+import { DiagramDomainStore } from './commands/diagram-domain.store';
+import { MONGO_DB } from '../shared/mongo/mongo.constants';
 
 export type DiagramMetadataEntry = {
   id: string;
@@ -29,6 +29,14 @@ export type DiagramEntity = {
   content: string;
 };
 
+type DiagramDoc = {
+  _id: string;
+  name: string;
+  content: string;
+  createdAt: Date;
+  updatedAt: Date;
+};
+
 const ID_RE = /^[0-9a-zA-Z_]{16}$/;
 const ID_CHARSET = '0123456789abcdefghijklmnopqrstuvwxyzABCDEFGHIJKLMNOPQRSTUVWXYZ_';
 
@@ -36,26 +44,30 @@ const ID_CHARSET = '0123456789abcdefghijklmnopqrstuvwxyzABCDEFGHIJKLMNOPQRSTUVWX
 export class DiagramsService implements OnModuleInit {
   private readonly logger = new Logger(DiagramsService.name);
 
-  private readonly diagramsDir = process.env.DIAGRAMS_DIR ?? '/app/diagrams';
-  private readonly indexFilePath = path.join(this.diagramsDir, 'index.json');
-
-  private readonly metadataById = new Map<string, DiagramMetadataEntry>();
+  private readonly diagrams: Collection<DiagramDoc>;
 
   private writeLock: Promise<void> = Promise.resolve();
 
-  constructor(private readonly mermaid: MermaidGeneratorService) {}
+  constructor(
+    @Inject(MONGO_DB) db: Db,
+    private readonly mermaid: MermaidGeneratorService,
+    private readonly domainStore: DiagramDomainStore,
+  ) {
+    this.diagrams = db.collection<DiagramDoc>('diagrams');
+  }
 
   async onModuleInit() {
-    await ensureDir(this.diagramsDir);
-    await this.loadIndex();
+    await this.diagrams.createIndex({ name: 1 });
 
     const seedEnabled = String(process.env.SEED_SAMPLE_DIAGRAMS ?? '')
       .trim()
       .toLowerCase() === 'true';
 
+    const count = await this.diagrams.countDocuments();
+
     // Seed sample diagrams only when explicitly enabled.
     if (!seedEnabled) {
-      if (this.metadataById.size === 0) {
+      if (count === 0) {
         this.logger.log(
           `Sample diagram seeding is disabled (set SEED_SAMPLE_DIAGRAMS=true to enable). Storage is empty; continuing without seeding.`,
         );
@@ -65,7 +77,7 @@ export class DiagramsService implements OnModuleInit {
       return;
     }
 
-    if (this.metadataById.size > 0) {
+    if (count > 0) {
       this.logger.log(
         `Sample diagram seeding is enabled (SEED_SAMPLE_DIAGRAMS=true) but storage is not empty; skipping seeding.`,
       );
@@ -111,37 +123,47 @@ export class DiagramsService implements OnModuleInit {
     for (const sample of samples) {
       const id = this.generateId();
       const content = sample.content;
-      const filePath = this.diagramFilePath(id);
 
-      await atomicWriteFile(filePath, content);
-      this.metadataById.set(id, { id, name: sample.name });
+      const now = new Date();
+      await this.diagrams.insertOne({
+        _id: id,
+        name: sample.name,
+        content,
+        createdAt: now,
+        updatedAt: now,
+      });
 
       this.logger.log(`Seeded sample diagram '${id}': ${sample.name}`);
     }
-
-    await this.persistIndex();
     this.logger.log(`Seeded ${samples.length} sample diagrams`);
   }
 
-  list(): DiagramMetadataEntry[] {
-    return [...this.metadataById.values()].sort((a, b) => a.name.localeCompare(b.name));
+  async list(): Promise<DiagramMetadataEntry[]> {
+    const docs = await this.diagrams
+      .find(
+        {},
+        {
+          projection: { name: 1 },
+        },
+      )
+      .sort({ name: 1, _id: 1 })
+      .toArray();
+
+    return docs.map((d) => ({ id: d._id, name: d.name }));
   }
 
   async get(id: string): Promise<DiagramEntity> {
     this.assertSafeId(id);
 
-    const meta = this.metadataById.get(id);
-    if (!meta) {
+    const doc = await this.diagrams.findOne(
+      { _id: id },
+      { projection: { name: 1, content: 1 } },
+    );
+    if (!doc) {
       throw new NotFoundException(`Diagram '${id}' not found`);
     }
 
-    const filePath = this.diagramFilePath(id);
-    if (!(await fileExists(filePath))) {
-      throw new NotFoundException(`Diagram '${id}' content not found`);
-    }
-
-    const content = await fs.readFile(filePath, 'utf8');
-    return { id: meta.id, name: meta.name, content };
+    return { id: doc._id, name: doc.name, content: doc.content };
   }
 
   async create(input: {
@@ -149,22 +171,36 @@ export class DiagramsService implements OnModuleInit {
     content?: string;
   }): Promise<DiagramEntity> {
     return this.withWriteLock(async () => {
-      const id = this.generateId();
-
       const name = input.name.trim();
       const content =
         input.content && input.content.trim().length
           ? input.content
           : this.mermaid.initialDiagram(name, 'light');
 
-      const filePath = this.diagramFilePath(id);
-      await atomicWriteFile(filePath, content);
+      const now = new Date();
 
-      this.metadataById.set(id, { id, name });
-      await this.persistIndex();
+      // Try a few times in the extremely unlikely event of an id collision.
+      for (let attempt = 0; attempt < 10; attempt++) {
+        const id = this.generateId();
+        try {
+          await this.diagrams.insertOne({
+            _id: id,
+            name,
+            content,
+            createdAt: now,
+            updatedAt: now,
+          });
 
-      this.logger.log(`Created diagram '${id}'`);
-      return { id, name, content };
+          this.logger.log(`Created diagram '${id}'`);
+          return { id, name, content };
+        } catch (err: any) {
+          if (err?.code === 11000) continue;
+          throw err;
+        }
+      }
+
+      throw new BadRequestException('Failed to generate a unique diagram id');
+
     });
   }
 
@@ -172,19 +208,17 @@ export class DiagramsService implements OnModuleInit {
     return this.withWriteLock(async () => {
       this.assertSafeId(id);
 
-      const meta = this.metadataById.get(id);
-      if (!meta) {
+      const doc = await this.diagrams.findOneAndUpdate(
+        { _id: id },
+        { $set: { content, updatedAt: new Date() } },
+        { returnDocument: 'after', projection: { name: 1, content: 1 } },
+      );
+      if (!doc) {
         throw new NotFoundException(`Diagram '${id}' not found`);
       }
 
-      const filePath = this.diagramFilePath(id);
-      if (!(await fileExists(filePath))) {
-        throw new NotFoundException(`Diagram '${id}' content not found`);
-      }
-
-      await atomicWriteFile(filePath, content);
       this.logger.log(`Updated content for diagram '${id}'`);
-      return { id, name: meta.name, content };
+      return { id: doc._id, name: doc.name, content: doc.content };
     });
   }
 
@@ -195,25 +229,20 @@ export class DiagramsService implements OnModuleInit {
     return this.withWriteLock(async () => {
       this.assertSafeId(id);
 
-      if (!this.metadataById.has(id)) {
-        throw new NotFoundException(`Diagram '${id}' not found`);
-      }
-
       const name = input.name.trim();
       const content = input.content;
 
-      const filePath = this.diagramFilePath(id);
-      if (!(await fileExists(filePath))) {
-        throw new NotFoundException(`Diagram '${id}' content not found`);
+      const doc = await this.diagrams.findOneAndUpdate(
+        { _id: id },
+        { $set: { name, content, updatedAt: new Date() } },
+        { returnDocument: 'after', projection: { name: 1, content: 1 } },
+      );
+      if (!doc) {
+        throw new NotFoundException(`Diagram '${id}' not found`);
       }
 
-      await atomicWriteFile(filePath, content);
-
-      this.metadataById.set(id, { id, name });
-      await this.persistIndex();
-
       this.logger.log(`Replaced diagram '${id}'`);
-      return { id, name, content };
+      return { id: doc._id, name: doc.name, content: doc.content };
     });
   }
 
@@ -221,28 +250,16 @@ export class DiagramsService implements OnModuleInit {
     return this.withWriteLock(async () => {
       this.assertSafeId(id);
 
-      if (!this.metadataById.has(id)) {
+      const res = await this.diagrams.deleteOne({ _id: id });
+      if (!res.deletedCount) {
         throw new NotFoundException(`Diagram '${id}' not found`);
       }
 
-      const filePath = this.diagramFilePath(id);
-      try {
-        await fs.unlink(filePath);
-      } catch {
-        // If content is already missing, treat as not found.
-        throw new NotFoundException(`Diagram '${id}' content not found`);
-      }
-
-      this.metadataById.delete(id);
-      await this.persistIndex();
+      await this.domainStore.delete(id);
 
       this.logger.log(`Deleted diagram '${id}'`);
       return { id };
     });
-  }
-
-  private diagramFilePath(id: string): string {
-    return path.join(this.diagramsDir, `${id}.mmd`);
   }
 
   private assertSafeId(id: string) {
@@ -255,14 +272,8 @@ export class DiagramsService implements OnModuleInit {
 
   private generateId(): string {
     // 63-character alphabet; use rejection sampling to avoid modulo bias.
-    // Collision handling: retry a few times; extremely unlikely for this scale.
-    for (let attempt = 0; attempt < 10; attempt++) {
-      const id = this.randomIdFromCharset(16);
-      if (!this.metadataById.has(id)) {
-        return id;
-      }
-    }
-    throw new BadRequestException('Failed to generate a unique diagram id');
+    // Uniqueness is enforced by MongoDB via the _id primary key.
+    return this.randomIdFromCharset(16);
   }
 
   private randomIdFromCharset(length: number): string {
@@ -297,51 +308,4 @@ export class DiagramsService implements OnModuleInit {
     }
   }
 
-  private async loadIndex(): Promise<void> {
-    if (!(await fileExists(this.indexFilePath))) {
-      await this.persistIndex();
-      return;
-    }
-
-    try {
-      const raw = await fs.readFile(this.indexFilePath, 'utf8');
-      const parsed = JSON.parse(raw) as Partial<DiagramIndexFile>;
-      const diagrams = Array.isArray(parsed.diagrams) ? parsed.diagrams : [];
-
-      this.metadataById.clear();
-      for (const entry of diagrams) {
-        if (
-          entry &&
-          typeof (entry as any).id === 'string' &&
-          typeof (entry as any).name === 'string'
-        ) {
-          const id = (entry as any).id;
-          const name = (entry as any).name;
-          if (ID_RE.test(id)) {
-            this.metadataById.set(id, { id, name });
-          }
-        }
-      }
-
-      this.logger.log(
-        `Loaded diagram index (${this.metadataById.size} entries) from ${this.indexFilePath}`,
-      );
-    } catch (err) {
-      this.logger.error(
-        `Failed to load diagram index at ${this.indexFilePath}; starting empty`,
-        (err as any)?.stack,
-      );
-      this.metadataById.clear();
-      await this.persistIndex();
-    }
-  }
-
-  private async persistIndex(): Promise<void> {
-    const index: DiagramIndexFile = {
-      version: 1,
-      diagrams: [...this.metadataById.values()].sort((a, b) => a.id.localeCompare(b.id)),
-    };
-
-    await atomicWriteFile(this.indexFilePath, JSON.stringify(index, null, 2));
-  }
 }

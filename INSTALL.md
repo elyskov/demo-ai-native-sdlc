@@ -1,9 +1,10 @@
 # Installation & Running
 
-This repository ships a minimal MVP with two services:
+This repository ships a minimal MVP with three services:
 
 - Backend (NestJS) on port 3000
 - Frontend (NextJS) on port 3001 (maps to container port 3000)
+- MongoDB on port 27017 (local persistence)
 
 ## 1) Development (Docker images)
 
@@ -14,12 +15,23 @@ Build images locally:
 
 Run backend:
 
-    docker run --rm -p 3000:3000 \
-      -e PORT=3000 \
-      -e APP_ENV=local \
-      -e APP_NAME=demo-ai-native-sdlc-backend \
-      -e NODE_ENV=production \
-      demo-ai-native-sdlc-backend:local
+        docker network create demo-ai-native-sdlc || true
+
+        docker run --rm -d --name demo-ai-mongo \
+            --network demo-ai-native-sdlc \
+            -p 27017:27017 \
+            -v demo-ai-mongo-data:/data/db \
+            mongo:7
+
+        docker run --rm -p 3000:3000 \
+            --network demo-ai-native-sdlc \
+            -e PORT=3000 \
+            -e APP_ENV=local \
+            -e APP_NAME=demo-ai-native-sdlc-backend \
+            -e NODE_ENV=production \
+            -e MONGO_URI=mongodb://demo-ai-mongo:27017/demo_ai_native_sdlc \
+            -e MONGO_DB_NAME=demo_ai_native_sdlc \
+            demo-ai-native-sdlc-backend:local
 
 Run frontend (talks to backend via your host network):
 
@@ -38,7 +50,7 @@ Stop and remove containers:
 
     docker compose down
 
-Remove containers and the diagrams volume (destructive):
+Remove containers and the MongoDB volume (destructive; resets all diagrams):
 
     docker compose down -v
 
