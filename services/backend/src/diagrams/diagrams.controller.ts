@@ -29,7 +29,7 @@ export class DiagramsController {
 
   @Get()
   @ApiOkResponse({ type: DiagramMetadata, isArray: true })
-  list(): DiagramMetadata[] {
+  async list(): Promise<DiagramMetadata[]> {
     return this.diagramsService.list();
   }
 

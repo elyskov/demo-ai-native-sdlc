@@ -1,9 +1,8 @@
-import { BadRequestException, Injectable, Logger } from '@nestjs/common';
+import { BadRequestException, Inject, Injectable, Logger } from '@nestjs/common';
 import { randomBytes } from 'node:crypto';
-import { promises as fs } from 'node:fs';
-import * as path from 'node:path';
+import type { Collection, Db } from 'mongodb';
 
-import { atomicWriteFile, ensureDir, fileExists } from '../../shared/fs-utils';
+import { MONGO_DB } from '../../shared/mongo/mongo.constants';
 
 export type DomainParentRef =
   | { root: 'definitions' | 'infrastructure' }
@@ -21,10 +20,22 @@ export type DiagramDomainState = {
   objects: DomainObject[];
 };
 
+type DiagramDomainDoc = {
+  _id: string; // diagramId
+  version: 1;
+  objects: any[];
+  updatedAt: Date;
+};
+
 @Injectable()
 export class DiagramDomainStore {
   private readonly logger = new Logger(DiagramDomainStore.name);
-  private readonly diagramsDir = process.env.DIAGRAMS_DIR ?? '/app/diagrams';
+
+  private readonly domains: Collection<DiagramDomainDoc>;
+
+  constructor(@Inject(MONGO_DB) db: Db) {
+    this.domains = db.collection<DiagramDomainDoc>('diagram_domains');
+  }
 
   private parseParentRef(value: unknown, ctx: { diagramId: string; objectId: string; entity: string }): DomainParentRef {
     if (!value || typeof value !== 'object' || Array.isArray(value)) {
@@ -73,19 +84,19 @@ export class DiagramDomainStore {
   }
 
   async load(diagramId: string): Promise<DiagramDomainState> {
-    await ensureDir(this.diagramsDir);
-
-    const filePath = this.domainFilePath(diagramId);
-    if (!(await fileExists(filePath))) {
+    const doc = await this.domains.findOne({ _id: diagramId });
+    if (!doc) {
       const empty: DiagramDomainState = { version: 1, objects: [] };
-      await atomicWriteFile(filePath, JSON.stringify(empty, null, 2));
+      await this.domains.updateOne(
+        { _id: diagramId },
+        { $setOnInsert: { version: 1, objects: [], updatedAt: new Date() } },
+        { upsert: true },
+      );
       return empty;
     }
 
     try {
-      const raw = await fs.readFile(filePath, 'utf8');
-      const parsed = JSON.parse(raw) as Partial<DiagramDomainState>;
-      const objects = Array.isArray(parsed.objects) ? (parsed.objects as any[]) : [];
+      const objects = Array.isArray((doc as any).objects) ? ((doc as any).objects as any[]) : [];
 
       return {
         version: 1,
@@ -114,8 +125,32 @@ export class DiagramDomainStore {
   }
 
   async save(diagramId: string, state: DiagramDomainState): Promise<void> {
-    const filePath = this.domainFilePath(diagramId);
-    await atomicWriteFile(filePath, JSON.stringify(state, null, 2));
+    const objects = Array.isArray(state.objects) ? state.objects : [];
+    const sanitized = objects.map((o) => {
+      const objectId = String((o as any).id ?? '');
+      const entity = String((o as any).entity ?? '');
+      if (!objectId || !entity) {
+        throw new BadRequestException('Invalid domain object');
+      }
+
+      const parent = this.parseParentRef((o as any).parent, { diagramId, objectId, entity });
+      const attributes =
+        typeof (o as any).attributes === 'object' && (o as any).attributes
+          ? (o as any).attributes
+          : {};
+
+      return { id: objectId, entity, parent, attributes };
+    });
+
+    await this.domains.updateOne(
+      { _id: diagramId },
+      { $set: { version: 1, objects: sanitized, updatedAt: new Date() } },
+      { upsert: true },
+    );
+  }
+
+  async delete(diagramId: string): Promise<void> {
+    await this.domains.deleteOne({ _id: diagramId });
   }
 
   generateObjectId(): string {
@@ -123,7 +158,4 @@ export class DiagramDomainStore {
     return randomBytes(6).toString('hex');
   }
 
-  private domainFilePath(diagramId: string): string {
-    return path.join(this.diagramsDir, `${diagramId}.domain.json`);
-  }
 }
