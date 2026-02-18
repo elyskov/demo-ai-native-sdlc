@@ -10,10 +10,24 @@
  */
 
 const KNOWN_ENTITIES = new Set([
+  // Organization
   'region',
   'site-group',
   'site',
   'location',
+  'tenant-group',
+  'tenant',
+
+  // Inventory / Definitions
+  'manufacturer',
+  'device-role',
+  'platform',
+  'device-type',
+  'virtual-chassis',
+  'rack-type',
+  'rack-role',
+
+  // Infrastructure
   'rack',
   'device',
   'if',
@@ -31,18 +45,32 @@ export function normalizeMermaidId(mermaidId) {
   if (typeof mermaidId !== 'string') return ''
   const trimmed = mermaidId.trim()
   if (!trimmed) return ''
-  const withoutPrefix = trimmed.startsWith('attr_') ? trimmed.slice('attr_'.length) : trimmed
-
-  // Some entities have hyphens in the NetBox model key, but Mermaid identifiers are
-  // safest with underscores. Normalize known cases back to the domain entity name.
-  const normalizedEntity = withoutPrefix.replace(/^site_group_/, 'site-group_')
+  let base = trimmed.startsWith('attr_') ? trimmed.slice('attr_'.length) : trimmed
 
   // Mermaid sometimes appends internal suffixes like "-label"/"-text" to ids.
-  // Domain object ids are stable hex strings (see backend DiagramDomainStore).
-  const m = normalizedEntity.match(/^(region|site-group|site|location|rack|device|if|container|node)_([A-Za-z0-9]+)/)
-  if (m) return `${m[1]}_${m[2]}`
+  base = base.replace(/-(label|text).*$/, '')
 
-  return normalizedEntity
+  // Some entities have hyphens in the model key, but Mermaid identifiers are safest
+  // with underscores. Normalize known prefixes back to the domain entity name.
+  const mermaidToDomain = new Map([
+    ['site_group', 'site-group'],
+    ['tenant_group', 'tenant-group'],
+    ['device_role', 'device-role'],
+    ['device_type', 'device-type'],
+    ['virtual_chassis', 'virtual-chassis'],
+    ['rack_type', 'rack-type'],
+    ['rack_role', 'rack-role'],
+  ])
+
+  for (const [mermaidPrefix, domainEntity] of mermaidToDomain.entries()) {
+    const prefix = `${mermaidPrefix}_`
+    if (base.startsWith(prefix)) {
+      base = `${domainEntity}_${base.slice(prefix.length)}`
+      break
+    }
+  }
+
+  return base
 }
 
 /**
@@ -59,7 +87,9 @@ export function parseMermaidDomainRef(mermaidId) {
     return { entity: 'root', id: base }
   }
 
-  const idx = base.indexOf('_')
+  // Entity prefixes may contain underscores (e.g. device_role_123). Split on the last
+  // underscore so ids remain intact and entity is parsed correctly.
+  const idx = base.lastIndexOf('_')
   if (idx <= 0 || idx === base.length - 1) return null
 
   const entity = base.slice(0, idx)

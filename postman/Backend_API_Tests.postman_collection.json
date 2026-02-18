@@ -21,7 +21,9 @@
     { "key": "diagram_id", "value": "", "description": "Auto-set by Create Diagram test" },
     { "key": "crud_diagram_id", "value": "", "description": "Auto-set for CRUD test cleanup" },
     { "key": "entity_id", "value": "", "description": "Auto-set by Create Entity (region) test" },
-    { "key": "child_entity_id", "value": "", "description": "Auto-set by Create Child Entity (site) test" }
+    { "key": "child_entity_id", "value": "", "description": "Auto-set by Create Child Entity (site) test" },
+    { "key": "def_manufacturer_id", "value": "", "description": "Auto-set by Create Entity (manufacturer) test" },
+    { "key": "def_device_role_id", "value": "", "description": "Auto-set by Create Entity (device-role) test" }
   ],
   "item": [
     {
@@ -504,6 +506,9 @@
                   "    pm.expect(body.types).to.be.an('array');",
                   "    pm.expect(body.types.length).to.be.above(0);",
                   "    pm.expect(body).to.have.property('details');",
+                  "    const first = body.types[0];",
+                  "    pm.expect(body.details).to.have.property(first);",
+                  "    pm.expect(body.details[first]).to.have.property('attributeDefinitions');",
                   "});"
                 ]
               }
@@ -547,6 +552,443 @@
           ]
         },
         {
+          "name": "Create Entity (device-role)",
+          "request": {
+            "method": "POST",
+            "header": [{ "key": "Content-Type", "value": "application/json" }],
+            "body": {
+              "mode": "raw",
+              "raw": "{\"command\": \"create\", \"entity\": \"device-role\", \"parent\": {\"root\": \"definitions\"}, \"attributes\": {\"name\": \"Switch\", \"slug\": \"switch\", \"color\": \"445566\"}}"
+            },
+            "url": {
+              "raw": "{{backend_base_url}}/api/diagrams/{{diagram_id}}/commands",
+              "host": ["{{backend_base_url}}"],
+              "path": ["api", "diagrams", "{{diagram_id}}", "commands"]
+            }
+          },
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test('Status code is 201', function () {",
+                  "    pm.response.to.have.status(201);",
+                  "});",
+                  "",
+                  "pm.test('Diagram includes new device-role', function () {",
+                  "    const body = pm.response.json();",
+                  "    pm.expect(body.content).to.include('device-role: Switch');",
+                  "    pm.expect(body.content).to.include('device_role_');",
+                  "    const match = String(body.content || '').match(/device_role_([A-Za-z0-9]+)/);",
+                  "    pm.expect(match, 'Expected device_role_<id> in content').to.not.be.null;",
+                  "    pm.collectionVariables.set('def_device_role_id', match[1]);",
+                  "});"
+                ]
+              }
+            }
+          ]
+        },
+        {
+          "name": "Create Entity (manufacturer)",
+          "request": {
+            "method": "POST",
+            "header": [{ "key": "Content-Type", "value": "application/json" }],
+            "body": {
+              "mode": "raw",
+              "raw": "{\"command\": \"create\", \"entity\": \"manufacturer\", \"parent\": {\"root\": \"definitions\"}, \"attributes\": {\"name\": \"Acme\", \"slug\": \"acme\"}}"
+            },
+            "url": {
+              "raw": "{{backend_base_url}}/api/diagrams/{{diagram_id}}/commands",
+              "host": ["{{backend_base_url}}"],
+              "path": ["api", "diagrams", "{{diagram_id}}", "commands"]
+            }
+          },
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test('Status code is 201', function () {",
+                  "    pm.response.to.have.status(201);",
+                  "});",
+                  "",
+                  "pm.test('Diagram includes new manufacturer', function () {",
+                  "    const body = pm.response.json();",
+                  "    pm.expect(body.content).to.include('manufacturer: Acme');",
+                  "    pm.expect(body.content).to.include('manufacturer_');",
+                  "    const match = String(body.content || '').match(/manufacturer_([A-Za-z0-9]+)/);",
+                  "    pm.expect(match, 'Expected manufacturer_<id> in content').to.not.be.null;",
+                  "    pm.collectionVariables.set('def_manufacturer_id', match[1]);",
+                  "});"
+                ]
+              }
+            }
+          ]
+        },
+        {
+          "name": "Get Element (device-role) (definitions context)",
+          "request": {
+            "method": "POST",
+            "header": [{ "key": "Content-Type", "value": "application/json" }],
+            "body": {
+              "mode": "raw",
+              "raw": "{\"command\": \"get-element\", \"entity\": \"device-role\", \"id\": \"{{def_device_role_id}}\"}"
+            },
+            "url": {
+              "raw": "{{backend_base_url}}/api/diagrams/{{diagram_id}}/commands",
+              "host": ["{{backend_base_url}}"],
+              "path": ["api", "diagrams", "{{diagram_id}}", "commands"]
+            }
+          },
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test('Status code is 201', function () {",
+                  "    pm.response.to.have.status(201);",
+                  "});",
+                  "",
+                  "pm.test('Device-role context is correct', function () {",
+                  "    const body = pm.response.json();",
+                  "    pm.expect(body).to.have.property('entity', 'device-role');",
+                  "    pm.expect(body).to.have.property('id', pm.collectionVariables.get('def_device_role_id'));",
+                  "    pm.expect(body).to.have.property('attributes');",
+                  "    pm.expect(body.attributes).to.have.property('name', 'Switch');",
+                  "    pm.expect(body.attributes).to.have.property('slug', 'switch');",
+                  "    pm.expect(body.attributes).to.have.property('color', '445566');",
+                  "    pm.expect(body).to.have.property('parent');",
+                  "    pm.expect(body.parent).to.have.property('root', 'definitions');",
+                  "});"
+                ]
+              }
+            }
+          ]
+        },
+        {
+          "name": "Get Element (manufacturer) (definitions context)",
+          "request": {
+            "method": "POST",
+            "header": [{ "key": "Content-Type", "value": "application/json" }],
+            "body": {
+              "mode": "raw",
+              "raw": "{\"command\": \"get-element\", \"entity\": \"manufacturer\", \"id\": \"{{def_manufacturer_id}}\"}"
+            },
+            "url": {
+              "raw": "{{backend_base_url}}/api/diagrams/{{diagram_id}}/commands",
+              "host": ["{{backend_base_url}}"],
+              "path": ["api", "diagrams", "{{diagram_id}}", "commands"]
+            }
+          },
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test('Status code is 201', function () {",
+                  "    pm.response.to.have.status(201);",
+                  "});",
+                  "",
+                  "pm.test('Manufacturer context is correct', function () {",
+                  "    const body = pm.response.json();",
+                  "    pm.expect(body).to.have.property('entity', 'manufacturer');",
+                  "    pm.expect(body).to.have.property('id', pm.collectionVariables.get('def_manufacturer_id'));",
+                  "    pm.expect(body).to.have.property('attributes');",
+                  "    pm.expect(body.attributes).to.have.property('name', 'Acme');",
+                  "    pm.expect(body.attributes).to.have.property('slug', 'acme');",
+                  "    pm.expect(body).to.have.property('parent');",
+                  "    pm.expect(body.parent).to.have.property('root', 'definitions');",
+                  "});"
+                ]
+              }
+            }
+          ]
+        },
+        {
+          "name": "Create Entity (rack-type) missing width (400)",
+          "request": {
+            "method": "POST",
+            "header": [{ "key": "Content-Type", "value": "application/json" }],
+            "body": {
+              "mode": "raw",
+              "raw": "{\"command\": \"create\", \"entity\": \"rack-type\", \"parent\": {\"entity\": \"manufacturer\", \"id\": \"{{def_manufacturer_id}}\"}, \"attributes\": {\"slug\": \"rt-missing-width\", \"model\": \"RT Missing Width\", \"form_factor\": \"4-post\", \"u_height\": \"42\", \"starting_unit\": \"1\"}}"
+            },
+            "url": {
+              "raw": "{{backend_base_url}}/api/diagrams/{{diagram_id}}/commands",
+              "host": ["{{backend_base_url}}"],
+              "path": ["api", "diagrams", "{{diagram_id}}", "commands"]
+            }
+          },
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test('Status code is 400', function () {",
+                  "    pm.response.to.have.status(400);",
+                  "});",
+                  "",
+                  "pm.test('Error mentions missing width', function () {",
+                  "    const body = pm.response.json();",
+                  "    const msg = Array.isArray(body.message) ? body.message.join('\\n') : String(body.message || '');",
+                  "    pm.expect(msg).to.include(\"Missing required attribute 'width'\");",
+                  "});"
+                ]
+              }
+            }
+          ]
+        },
+        {
+          "name": "Create Entity (rack-type) (201)",
+          "request": {
+            "method": "POST",
+            "header": [{ "key": "Content-Type", "value": "application/json" }],
+            "body": {
+              "mode": "raw",
+              "raw": "{\"command\": \"create\", \"entity\": \"rack-type\", \"parent\": {\"entity\": \"manufacturer\", \"id\": \"{{def_manufacturer_id}}\"}, \"attributes\": {\"slug\": \"rt-ok\", \"model\": \"RT OK\", \"form_factor\": \"4-post\", \"width\": \"19\", \"u_height\": \"42\", \"starting_unit\": \"1\"}}"
+            },
+            "url": {
+              "raw": "{{backend_base_url}}/api/diagrams/{{diagram_id}}/commands",
+              "host": ["{{backend_base_url}}"],
+              "path": ["api", "diagrams", "{{diagram_id}}", "commands"]
+            }
+          },
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test('Status code is 201', function () {",
+                  "    pm.response.to.have.status(201);",
+                  "});",
+                  "",
+                  "pm.test('Diagram includes new rack-type mermaid block', function () {",
+                  "    const body = pm.response.json();",
+                  "    pm.expect(body.content).to.include('rack-type');",
+                  "    pm.expect(body.content).to.include('rack_type_');",
+                  "});"
+                ]
+              }
+            }
+          ]
+        },
+        {
+          "name": "Create Entity (platform)",
+          "request": {
+            "method": "POST",
+            "header": [{ "key": "Content-Type", "value": "application/json" }],
+            "body": {
+              "mode": "raw",
+              "raw": "{\"command\": \"create\", \"entity\": \"platform\", \"parent\": {\"root\": \"definitions\"}, \"attributes\": {\"name\": \"IOS-XE\", \"slug\": \"ios-xe\"}}"
+            },
+            "url": {
+              "raw": "{{backend_base_url}}/api/diagrams/{{diagram_id}}/commands",
+              "host": ["{{backend_base_url}}"],
+              "path": ["api", "diagrams", "{{diagram_id}}", "commands"]
+            }
+          },
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test('Status code is 201', function () {",
+                  "    pm.response.to.have.status(201);",
+                  "});",
+                  "",
+                  "pm.test('Diagram includes new platform', function () {",
+                  "    const body = pm.response.json();",
+                  "    pm.expect(body.content).to.include('platform: IOS-XE');",
+                  "    pm.expect(body.content).to.include('platform_');",
+                  "});"
+                ]
+              }
+            }
+          ]
+        },
+        {
+          "name": "Create Entity (tenant-group)",
+          "request": {
+            "method": "POST",
+            "header": [{ "key": "Content-Type", "value": "application/json" }],
+            "body": {
+              "mode": "raw",
+              "raw": "{\"command\": \"create\", \"entity\": \"tenant-group\", \"parent\": {\"root\": \"definitions\"}, \"attributes\": {\"name\": \"Customers\", \"slug\": \"customers\"}}"
+            },
+            "url": {
+              "raw": "{{backend_base_url}}/api/diagrams/{{diagram_id}}/commands",
+              "host": ["{{backend_base_url}}"],
+              "path": ["api", "diagrams", "{{diagram_id}}", "commands"]
+            }
+          },
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test('Status code is 201', function () {",
+                  "    pm.response.to.have.status(201);",
+                  "});",
+                  "",
+                  "pm.test('Diagram includes new tenant-group', function () {",
+                  "    const body = pm.response.json();",
+                  "    pm.expect(body.content).to.include('tenant-group: Customers');",
+                  "    pm.expect(body.content).to.include('tenant_group_');",
+                  "});"
+                ]
+              }
+            }
+          ]
+        },
+        {
+          "name": "Create Entity (tenant)",
+          "request": {
+            "method": "POST",
+            "header": [{ "key": "Content-Type", "value": "application/json" }],
+            "body": {
+              "mode": "raw",
+              "raw": "{\"command\": \"create\", \"entity\": \"tenant\", \"parent\": {\"root\": \"definitions\"}, \"attributes\": {\"name\": \"Example Corp\", \"slug\": \"example-corp\"}}"
+            },
+            "url": {
+              "raw": "{{backend_base_url}}/api/diagrams/{{diagram_id}}/commands",
+              "host": ["{{backend_base_url}}"],
+              "path": ["api", "diagrams", "{{diagram_id}}", "commands"]
+            }
+          },
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test('Status code is 201', function () {",
+                  "    pm.response.to.have.status(201);",
+                  "});",
+                  "",
+                  "pm.test('Diagram includes new tenant', function () {",
+                  "    const body = pm.response.json();",
+                  "    pm.expect(body.content).to.include('tenant: Example Corp');",
+                  "    pm.expect(body.content).to.include('tenant_');",
+                  "});"
+                ]
+              }
+            }
+          ]
+        },
+        {
+          "name": "Create Entity (site-group)",
+          "request": {
+            "method": "POST",
+            "header": [{ "key": "Content-Type", "value": "application/json" }],
+            "body": {
+              "mode": "raw",
+              "raw": "{\"command\": \"create\", \"entity\": \"site-group\", \"parent\": {\"root\": \"definitions\"}, \"attributes\": {\"name\": \"Campus\", \"slug\": \"campus\"}}"
+            },
+            "url": {
+              "raw": "{{backend_base_url}}/api/diagrams/{{diagram_id}}/commands",
+              "host": ["{{backend_base_url}}"],
+              "path": ["api", "diagrams", "{{diagram_id}}", "commands"]
+            }
+          },
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test('Status code is 201', function () {",
+                  "    pm.response.to.have.status(201);",
+                  "});",
+                  "",
+                  "pm.test('Diagram includes new site-group', function () {",
+                  "    const body = pm.response.json();",
+                  "    pm.expect(body.content).to.include('site-group: Campus');",
+                  "    pm.expect(body.content).to.include('site_group_');",
+                  "});"
+                ]
+              }
+            }
+          ]
+        },
+        {
+          "name": "Create Entity (device-type)",
+          "request": {
+            "method": "POST",
+            "header": [{ "key": "Content-Type", "value": "application/json" }],
+            "body": {
+              "mode": "raw",
+              "raw": "{\"command\": \"create\", \"entity\": \"device-type\", \"parent\": {\"root\": \"definitions\"}, \"attributes\": {\"slug\": \"c9300\", \"model\": \"Catalyst 9300\", \"u_height\": \"1\"}}"
+            },
+            "url": {
+              "raw": "{{backend_base_url}}/api/diagrams/{{diagram_id}}/commands",
+              "host": ["{{backend_base_url}}"],
+              "path": ["api", "diagrams", "{{diagram_id}}", "commands"]
+            }
+          },
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test('Status code is 201', function () {",
+                  "    pm.response.to.have.status(201);",
+                  "});",
+                  "",
+                  "pm.test('Diagram includes new device-type mermaid block', function () {",
+                  "    const body = pm.response.json();",
+                  "    pm.expect(body.content).to.include('device_type_');",
+                  "    pm.expect(body.content).to.include('model: Catalyst 9300');",
+                  "});"
+                ]
+              }
+            }
+          ]
+        },
+        {
+          "name": "Create Entity (virtual-chassis)",
+          "request": {
+            "method": "POST",
+            "header": [{ "key": "Content-Type", "value": "application/json" }],
+            "body": {
+              "mode": "raw",
+              "raw": "{\"command\": \"create\", \"entity\": \"virtual-chassis\", \"parent\": {\"root\": \"definitions\"}, \"attributes\": {\"name\": \"VC-1\"}}"
+            },
+            "url": {
+              "raw": "{{backend_base_url}}/api/diagrams/{{diagram_id}}/commands",
+              "host": ["{{backend_base_url}}"],
+              "path": ["api", "diagrams", "{{diagram_id}}", "commands"]
+            }
+          },
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test('Status code is 201', function () {",
+                  "    pm.response.to.have.status(201);",
+                  "});",
+                  "",
+                  "pm.test('Diagram includes new virtual-chassis', function () {",
+                  "    const body = pm.response.json();",
+                  "    pm.expect(body.content).to.include('virtual-chassis: VC-1');",
+                  "    pm.expect(body.content).to.include('virtual_chassis_');",
+                  "});"
+                ]
+              }
+            }
+          ]
+        },
+        {
           "name": "Create Entity (region)",
           "request": {
             "method": "POST",
@@ -576,6 +1018,42 @@
                   "    pm.expect(body).to.have.property('id');",
                   "    pm.expect(body).to.have.property('content');",
                   "    pm.expect(body.content).to.include('Test Region');",
+                  "});"
+                ]
+              }
+            }
+          ]
+        },
+        {
+          "name": "Create Entity (region) invalid slug pattern",
+          "request": {
+            "method": "POST",
+            "header": [{ "key": "Content-Type", "value": "application/json" }],
+            "body": {
+              "mode": "raw",
+              "raw": "{\"command\": \"create\", \"entity\": \"region\", \"parent\": {\"root\": \"infrastructure\"}, \"attributes\": {\"name\": \"Bad Region\", \"slug\": \"bad slug\"}}"
+            },
+            "url": {
+              "raw": "{{backend_base_url}}/api/diagrams/{{diagram_id}}/commands",
+              "host": ["{{backend_base_url}}"],
+              "path": ["api", "diagrams", "{{diagram_id}}", "commands"]
+            }
+          },
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test('Status code is 400', function () {",
+                  "    pm.response.to.have.status(400);",
+                  "});",
+                  "",
+                  "pm.test('Error message mentions slug/pattern', function () {",
+                  "    const body = pm.response.json();",
+                  "    const msg = Array.isArray(body.message) ? body.message.join('\\n') : String(body.message || '');",
+                  "    pm.expect(msg).to.include('slug');",
+                  "    pm.expect(msg).to.include('pattern');",
                   "});"
                 ]
               }
@@ -614,6 +1092,41 @@
                   "    const region = body.elements.find(e => e.name === 'Test Region');",
                   "    pm.expect(region, 'Test Region should exist').to.not.be.undefined;",
                   "    pm.collectionVariables.set('entity_id', region.id);",
+                  "});"
+                ]
+              }
+            }
+          ]
+        },
+        {
+          "name": "Update Entity (region) invalid name maxLength",
+          "request": {
+            "method": "POST",
+            "header": [{ "key": "Content-Type", "value": "application/json" }],
+            "body": {
+              "mode": "raw",
+              "raw": "{\"command\": \"update\", \"entity\": \"region\", \"id\": \"{{entity_id}}\", \"attributes\": {\"name\": \"aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa\"}}"
+            },
+            "url": {
+              "raw": "{{backend_base_url}}/api/diagrams/{{diagram_id}}/commands",
+              "host": ["{{backend_base_url}}"],
+              "path": ["api", "diagrams", "{{diagram_id}}", "commands"]
+            }
+          },
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test('Status code is 400', function () {",
+                  "    pm.response.to.have.status(400);",
+                  "});",
+                  "",
+                  "pm.test('Error message mentions maxLength', function () {",
+                  "    const body = pm.response.json();",
+                  "    const msg = Array.isArray(body.message) ? body.message.join('\\n') : String(body.message || '');",
+                  "    pm.expect(msg).to.include('maxLength');",
                   "});"
                 ]
               }
@@ -693,13 +1206,49 @@
           ]
         },
         {
+          "name": "Create Child Entity (site) invalid status enum",
+          "request": {
+            "method": "POST",
+            "header": [{ "key": "Content-Type", "value": "application/json" }],
+            "body": {
+              "mode": "raw",
+              "raw": "{\"command\": \"create\", \"entity\": \"site\", \"parent\": {\"entity\": \"region\", \"id\": \"{{entity_id}}\"}, \"attributes\": {\"name\": \"Bad Site\", \"slug\": \"bad-site\", \"status\": \"Active\"}}"
+            },
+            "url": {
+              "raw": "{{backend_base_url}}/api/diagrams/{{diagram_id}}/commands",
+              "host": ["{{backend_base_url}}"],
+              "path": ["api", "diagrams", "{{diagram_id}}", "commands"]
+            }
+          },
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test('Status code is 400', function () {",
+                  "    pm.response.to.have.status(400);",
+                  "});",
+                  "",
+                  "pm.test('Error message mentions allowed values', function () {",
+                  "    const body = pm.response.json();",
+                  "    const msg = Array.isArray(body.message) ? body.message.join('\\n') : String(body.message || '');",
+                  "    pm.expect(msg).to.include('status');",
+                  "    pm.expect(msg).to.include('must be one of');",
+                  "});"
+                ]
+              }
+            }
+          ]
+        },
+        {
           "name": "Create Child Entity (site)",
           "request": {
             "method": "POST",
             "header": [{ "key": "Content-Type", "value": "application/json" }],
             "body": {
               "mode": "raw",
-              "raw": "{\"command\": \"create\", \"entity\": \"site\", \"parent\": {\"entity\": \"region\", \"id\": \"{{entity_id}}\"}, \"attributes\": {\"name\": \"Test Site\", \"slug\": \"test-site\", \"status\": \"Active\"}}"
+              "raw": "{\"command\": \"create\", \"entity\": \"site\", \"parent\": {\"entity\": \"region\", \"id\": \"{{entity_id}}\"}, \"attributes\": {\"name\": \"Test Site\", \"slug\": \"test-site\", \"status\": \"active\"}}"
             },
             "url": {
               "raw": "{{backend_base_url}}/api/diagrams/{{diagram_id}}/commands",
@@ -727,6 +1276,71 @@
                   "    const match = body.content.match(/site_([a-f0-9]+)/);",
                   "    pm.expect(match, 'Site ID pattern should be in content').to.not.be.null;",
                   "    pm.collectionVariables.set('child_entity_id', match[1]);",
+                  "});"
+                ]
+              }
+            }
+          ]
+        },
+        {
+          "name": "Update Entity (site) invalid latitude maximum",
+          "request": {
+            "method": "POST",
+            "header": [{ "key": "Content-Type", "value": "application/json" }],
+            "body": {
+              "mode": "raw",
+              "raw": "{\"command\": \"update\", \"entity\": \"site\", \"id\": \"{{child_entity_id}}\", \"attributes\": {\"latitude\": \"91.000000\"}}"
+            },
+            "url": {
+              "raw": "{{backend_base_url}}/api/diagrams/{{diagram_id}}/commands",
+              "host": ["{{backend_base_url}}"],
+              "path": ["api", "diagrams", "{{diagram_id}}", "commands"]
+            }
+          },
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test('Status code is 400', function () {",
+                  "    pm.response.to.have.status(400);",
+                  "});",
+                  "",
+                  "pm.test('Error message mentions maximum', function () {",
+                  "    const body = pm.response.json();",
+                  "    const msg = Array.isArray(body.message) ? body.message.join('\\n') : String(body.message || '');",
+                  "    pm.expect(msg).to.include('latitude');",
+                  "    pm.expect(msg).to.include('<=');",
+                  "});"
+                ]
+              }
+            }
+          ]
+        },
+        {
+          "name": "Update Entity (site) valid latitude format",
+          "request": {
+            "method": "POST",
+            "header": [{ "key": "Content-Type", "value": "application/json" }],
+            "body": {
+              "mode": "raw",
+              "raw": "{\"command\": \"update\", \"entity\": \"site\", \"id\": \"{{child_entity_id}}\", \"attributes\": {\"latitude\": \"02.123456\"}}"
+            },
+            "url": {
+              "raw": "{{backend_base_url}}/api/diagrams/{{diagram_id}}/commands",
+              "host": ["{{backend_base_url}}"],
+              "path": ["api", "diagrams", "{{diagram_id}}", "commands"]
+            }
+          },
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test('Status code is 201', function () {",
+                  "    pm.response.to.have.status(201);",
                   "});"
                 ]
               }
@@ -1187,7 +1801,9 @@
                   "// Clean up collection variables after verification",
                   "pm.collectionVariables.set('diagram_id', '');",
                   "pm.collectionVariables.set('entity_id', '');",
-                  "pm.collectionVariables.set('child_entity_id', '');"
+                  "pm.collectionVariables.set('child_entity_id', '');",
+                  "pm.collectionVariables.set('def_manufacturer_id', '');",
+                  "pm.collectionVariables.set('def_device_role_id', '');"
                 ]
               }
             }

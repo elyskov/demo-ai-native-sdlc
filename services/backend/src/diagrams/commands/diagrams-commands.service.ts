@@ -10,6 +10,7 @@ import { DiagramsService } from '../diagrams.service';
 import { MermaidGeneratorService } from '../mermaid/mermaid-generator.service';
 import { DiagramCommandDto } from './dto/diagram-command.dto';
 import { DiagramDomainStore, DomainObject, DomainParentRef } from './diagram-domain.store';
+import { validateEntityAttributes } from './attribute-validation';
 
 @Injectable()
 export class DiagramsCommandsService {
@@ -234,15 +235,11 @@ export class DiagramsCommandsService {
     const cfg = model.entities?.[entity];
     if (!cfg) throw new BadRequestException(`Unknown entity '${entity}'`);
 
-    const required = Object.entries(cfg.attributes ?? {})
-      .filter(([, v]) => v?.required)
-      .map(([k]) => k);
-
-    for (const key of required) {
-      const val = attrs[key];
-      if (val === undefined || val === null || String(val).trim() === '') {
-        throw new BadRequestException(`Missing required attribute '${key}' for '${entity}'`);
-      }
+    try {
+      validateEntityAttributes(entity, attrs, cfg.attributes);
+    } catch (err) {
+      const msg = (err as any)?.message ? String((err as any).message) : 'Invalid attributes';
+      throw new BadRequestException(msg);
     }
   }
 
@@ -321,7 +318,14 @@ export class DiagramsCommandsService {
       ),
     ).sort((a, b) => a.localeCompare(b));
 
-    const details: Record<string, { attributes: string[]; requiredAttributes: string[] }> = {};
+    const details: Record<
+      string,
+      {
+        attributes: string[];
+        requiredAttributes: string[];
+        attributeDefinitions: Record<string, any>;
+      }
+    > = {};
     for (const type of types) {
       const cfg = entities[type];
       const attrs = cfg?.attributes ?? {};
@@ -329,6 +333,25 @@ export class DiagramsCommandsService {
       details[type] = {
         attributes: attributeKeys,
         requiredAttributes: attributeKeys.filter((k) => Boolean((attrs as any)?.[k]?.required)),
+        attributeDefinitions: Object.fromEntries(
+          attributeKeys.map((k) => {
+            const def: any = (attrs as any)?.[k] ?? {};
+            return [
+              k,
+              {
+                required: Boolean(def.required),
+                type: def.type ?? 'string',
+                maxLength: def.maxLength ?? 100,
+                pattern: def.pattern,
+                value: def.value,
+                label: def.label,
+                nullable: Boolean(def.nullable),
+                minimum: def.minimum,
+                maximum: def.maximum,
+              },
+            ];
+          }),
+        ),
       };
     }
 

@@ -61,6 +61,70 @@ entities:
     label: "location: {{ object.name }}"
 
 
+  tenant-group:
+    mermaid:
+      kind: structural
+      type: subgraph
+      id: "tenant_group_{{ object.id }}"
+    label: "tenant-group: {{ object.name }}"
+
+
+  tenant:
+    mermaid:
+      kind: structural
+      type: subgraph
+      id: "tenant_{{ object.id }}"
+    label: "tenant: {{ object.name }}"
+
+
+  manufacturer:
+    mermaid:
+      kind: structural
+      type: subgraph
+      id: "manufacturer_{{ object.id }}"
+    label: "manufacturer: {{ object.name }}"
+
+
+  device-role:
+    mermaid:
+      kind: structural
+      type: subgraph
+      id: "device_role_{{ object.id }}"
+    label: "device-role: {{ object.name }}"
+
+
+  platform:
+    mermaid:
+      kind: structural
+      type: subgraph
+      id: "platform_{{ object.id }}"
+    label: "platform: {{ object.name }}"
+
+
+  device-type:
+    mermaid:
+      kind: structural
+      type: subgraph
+      id: "device_type_{{ object.id }}"
+    label: "device-type: {{ object.name }}"
+
+
+  rack-type:
+    mermaid:
+      kind: structural
+      type: subgraph
+      id: "rack_type_{{ object.id }}"
+    label: "rack-type: {{ object.name }}"
+
+
+  virtual-chassis:
+    mermaid:
+      kind: structural
+      type: subgraph
+      id: "virtual_chassis_{{ object.id }}"
+    label: "virtual-chassis: {{ object.name }}"
+
+
   rack:
     mermaid:
       kind: structural

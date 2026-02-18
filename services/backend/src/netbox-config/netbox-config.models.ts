@@ -1,3 +1,17 @@
+export type NetboxAttributeType = 'string' | 'number' | 'integer' | 'boolean';
+
+export type NetboxAttributeDefinition = {
+  required?: boolean;
+  maxLength?: number;
+  type?: NetboxAttributeType;
+  pattern?: string;
+  value?: Array<string | number | boolean>;
+  label?: string[];
+  nullable?: boolean;
+  minimum?: number;
+  maximum?: number;
+};
+
 export type NetboxModelConfig = {
   version: number | string;
   roots: Record<string, { description?: string }>;
@@ -10,7 +24,7 @@ export type NetboxModelConfig = {
         allowed?: Array<{ root?: string; entity?: string; field?: string }>;
       };
       links?: Record<string, { entity: string; field: string; required?: boolean }>;
-      attributes?: Record<string, { required?: boolean }>;
+      attributes?: Record<string, NetboxAttributeDefinition>;
     }
   >;
 };
