@@ -273,6 +273,444 @@
               }
             }
           ]
+        },
+        {
+          "name": "Proxy: Create Entity (device-role)",
+          "request": {
+            "method": "POST",
+            "header": [{ "key": "Content-Type", "value": "application/json" }],
+            "body": {
+              "mode": "raw",
+              "raw": "{\"command\": \"create\", \"entity\": \"device-role\", \"parent\": {\"root\": \"definitions\"}, \"attributes\": {\"name\": \"Proxy Switch\", \"slug\": \"proxy-switch\", \"color\": \"445566\"}}"
+            },
+            "url": {
+              "raw": "{{frontend_base_url}}/api/diagrams/{{diagram_id}}/commands",
+              "host": ["{{frontend_base_url}}"],
+              "path": ["api", "diagrams", "{{diagram_id}}", "commands"]
+            }
+          },
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test('Status code is 201', function () {",
+                  "    pm.response.to.have.status(201);",
+                  "});",
+                  "",
+                  "pm.test('Device-role created through proxy', function () {",
+                  "    const body = pm.response.json();",
+                  "    pm.expect(body.content).to.include('device-role: Proxy Switch');",
+                  "    pm.expect(body.content).to.include('device_role_');",
+                  "    const match = String(body.content || '').match(/device_role_([A-Za-z0-9]+)/);",
+                  "    pm.expect(match, 'Expected device_role_<id> in content').to.not.be.null;",
+                  "    pm.collectionVariables.set('def_device_role_id', match[1]);",
+                  "});"
+                ]
+              }
+            }
+          ]
+        }
+        ,
+        {
+          "name": "Proxy: Create Entity (manufacturer)",
+          "request": {
+            "method": "POST",
+            "header": [{ "key": "Content-Type", "value": "application/json" }],
+            "body": {
+              "mode": "raw",
+              "raw": "{\"command\": \"create\", \"entity\": \"manufacturer\", \"parent\": {\"root\": \"definitions\"}, \"attributes\": {\"name\": \"Proxy Acme\", \"slug\": \"proxy-acme\"}}"
+            },
+            "url": {
+              "raw": "{{frontend_base_url}}/api/diagrams/{{diagram_id}}/commands",
+              "host": ["{{frontend_base_url}}"],
+              "path": ["api", "diagrams", "{{diagram_id}}", "commands"]
+            }
+          },
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test('Status code is 201', function () {",
+                  "    pm.response.to.have.status(201);",
+                  "});",
+                  "",
+                  "pm.test('Manufacturer created through proxy', function () {",
+                  "    const body = pm.response.json();",
+                  "    pm.expect(body.content).to.include('manufacturer: Proxy Acme');",
+                  "    pm.expect(body.content).to.include('manufacturer_');",
+                  "    const match = String(body.content || '').match(/manufacturer_([A-Za-z0-9]+)/);",
+                  "    pm.expect(match, 'Expected manufacturer_<id> in content').to.not.be.null;",
+                  "    pm.collectionVariables.set('def_manufacturer_id', match[1]);",
+                  "});"
+                ]
+              }
+            }
+          ]
+        },
+        {
+          "name": "Proxy: Get Element (device-role) (definitions context)",
+          "request": {
+            "method": "POST",
+            "header": [{ "key": "Content-Type", "value": "application/json" }],
+            "body": {
+              "mode": "raw",
+              "raw": "{\"command\": \"get-element\", \"entity\": \"device-role\", \"id\": \"{{def_device_role_id}}\"}"
+            },
+            "url": {
+              "raw": "{{frontend_base_url}}/api/diagrams/{{diagram_id}}/commands",
+              "host": ["{{frontend_base_url}}"],
+              "path": ["api", "diagrams", "{{diagram_id}}", "commands"]
+            }
+          },
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test('Status code is 201', function () {",
+                  "    pm.response.to.have.status(201);",
+                  "});",
+                  "",
+                  "pm.test('Device-role context is correct (proxy)', function () {",
+                  "    const body = pm.response.json();",
+                  "    pm.expect(body).to.have.property('entity', 'device-role');",
+                  "    pm.expect(body).to.have.property('id', pm.collectionVariables.get('def_device_role_id'));",
+                  "    pm.expect(body).to.have.property('attributes');",
+                  "    pm.expect(body.attributes).to.have.property('name', 'Proxy Switch');",
+                  "    pm.expect(body.attributes).to.have.property('slug', 'proxy-switch');",
+                  "    pm.expect(body.attributes).to.have.property('color', '445566');",
+                  "    pm.expect(body).to.have.property('parent');",
+                  "    pm.expect(body.parent).to.have.property('root', 'definitions');",
+                  "});"
+                ]
+              }
+            }
+          ]
+        },
+        {
+          "name": "Proxy: Get Element (manufacturer) (definitions context)",
+          "request": {
+            "method": "POST",
+            "header": [{ "key": "Content-Type", "value": "application/json" }],
+            "body": {
+              "mode": "raw",
+              "raw": "{\"command\": \"get-element\", \"entity\": \"manufacturer\", \"id\": \"{{def_manufacturer_id}}\"}"
+            },
+            "url": {
+              "raw": "{{frontend_base_url}}/api/diagrams/{{diagram_id}}/commands",
+              "host": ["{{frontend_base_url}}"],
+              "path": ["api", "diagrams", "{{diagram_id}}", "commands"]
+            }
+          },
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test('Status code is 201', function () {",
+                  "    pm.response.to.have.status(201);",
+                  "});",
+                  "",
+                  "pm.test('Manufacturer context is correct (proxy)', function () {",
+                  "    const body = pm.response.json();",
+                  "    pm.expect(body).to.have.property('entity', 'manufacturer');",
+                  "    pm.expect(body).to.have.property('id', pm.collectionVariables.get('def_manufacturer_id'));",
+                  "    pm.expect(body).to.have.property('attributes');",
+                  "    pm.expect(body.attributes).to.have.property('name', 'Proxy Acme');",
+                  "    pm.expect(body.attributes).to.have.property('slug', 'proxy-acme');",
+                  "    pm.expect(body).to.have.property('parent');",
+                  "    pm.expect(body.parent).to.have.property('root', 'definitions');",
+                  "});"
+                ]
+              }
+            }
+          ]
+        },
+        {
+          "name": "Proxy: Create Entity (rack-type) missing width (400)",
+          "request": {
+            "method": "POST",
+            "header": [{ "key": "Content-Type", "value": "application/json" }],
+            "body": {
+              "mode": "raw",
+              "raw": "{\"command\": \"create\", \"entity\": \"rack-type\", \"parent\": {\"entity\": \"manufacturer\", \"id\": \"{{def_manufacturer_id}}\"}, \"attributes\": {\"slug\": \"proxy-rt-missing-width\", \"model\": \"Proxy RT Missing Width\", \"form_factor\": \"4-post\", \"u_height\": \"42\", \"starting_unit\": \"1\"}}"
+            },
+            "url": {
+              "raw": "{{frontend_base_url}}/api/diagrams/{{diagram_id}}/commands",
+              "host": ["{{frontend_base_url}}"],
+              "path": ["api", "diagrams", "{{diagram_id}}", "commands"]
+            }
+          },
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test('Status code is 400', function () {",
+                  "    pm.response.to.have.status(400);",
+                  "});",
+                  "",
+                  "pm.test('Error mentions missing width (proxy)', function () {",
+                  "    const body = pm.response.json();",
+                  "    const msg = Array.isArray(body.message) ? body.message.join('\\n') : String(body.message || '');",
+                  "    pm.expect(msg).to.include(\"Missing required attribute 'width'\");",
+                  "});"
+                ]
+              }
+            }
+          ]
+        },
+        {
+          "name": "Proxy: Create Entity (rack-type) (201)",
+          "request": {
+            "method": "POST",
+            "header": [{ "key": "Content-Type", "value": "application/json" }],
+            "body": {
+              "mode": "raw",
+              "raw": "{\"command\": \"create\", \"entity\": \"rack-type\", \"parent\": {\"entity\": \"manufacturer\", \"id\": \"{{def_manufacturer_id}}\"}, \"attributes\": {\"slug\": \"proxy-rt-ok\", \"model\": \"Proxy RT OK\", \"form_factor\": \"4-post\", \"width\": \"19\", \"u_height\": \"42\", \"starting_unit\": \"1\"}}"
+            },
+            "url": {
+              "raw": "{{frontend_base_url}}/api/diagrams/{{diagram_id}}/commands",
+              "host": ["{{frontend_base_url}}"],
+              "path": ["api", "diagrams", "{{diagram_id}}", "commands"]
+            }
+          },
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test('Status code is 201', function () {",
+                  "    pm.response.to.have.status(201);",
+                  "});",
+                  "",
+                  "pm.test('Diagram includes new rack-type mermaid block (proxy)', function () {",
+                  "    const body = pm.response.json();",
+                  "    pm.expect(body.content).to.include('rack-type');",
+                  "    pm.expect(body.content).to.include('rack_type_');",
+                  "});"
+                ]
+              }
+            }
+          ]
+        },
+        {
+          "name": "Proxy: Create Entity (platform)",
+          "request": {
+            "method": "POST",
+            "header": [{ "key": "Content-Type", "value": "application/json" }],
+            "body": {
+              "mode": "raw",
+              "raw": "{\"command\": \"create\", \"entity\": \"platform\", \"parent\": {\"root\": \"definitions\"}, \"attributes\": {\"name\": \"Proxy IOS-XE\", \"slug\": \"proxy-ios-xe\"}}"
+            },
+            "url": {
+              "raw": "{{frontend_base_url}}/api/diagrams/{{diagram_id}}/commands",
+              "host": ["{{frontend_base_url}}"],
+              "path": ["api", "diagrams", "{{diagram_id}}", "commands"]
+            }
+          },
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test('Status code is 201', function () {",
+                  "    pm.response.to.have.status(201);",
+                  "});",
+                  "",
+                  "pm.test('Platform created through proxy', function () {",
+                  "    const body = pm.response.json();",
+                  "    pm.expect(body.content).to.include('platform: Proxy IOS-XE');",
+                  "    pm.expect(body.content).to.include('platform_');",
+                  "});"
+                ]
+              }
+            }
+          ]
+        },
+        {
+          "name": "Proxy: Create Entity (tenant-group)",
+          "request": {
+            "method": "POST",
+            "header": [{ "key": "Content-Type", "value": "application/json" }],
+            "body": {
+              "mode": "raw",
+              "raw": "{\"command\": \"create\", \"entity\": \"tenant-group\", \"parent\": {\"root\": \"definitions\"}, \"attributes\": {\"name\": \"Proxy Customers\", \"slug\": \"proxy-customers\"}}"
+            },
+            "url": {
+              "raw": "{{frontend_base_url}}/api/diagrams/{{diagram_id}}/commands",
+              "host": ["{{frontend_base_url}}"],
+              "path": ["api", "diagrams", "{{diagram_id}}", "commands"]
+            }
+          },
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test('Status code is 201', function () {",
+                  "    pm.response.to.have.status(201);",
+                  "});",
+                  "",
+                  "pm.test('Tenant-group created through proxy', function () {",
+                  "    const body = pm.response.json();",
+                  "    pm.expect(body.content).to.include('tenant-group: Proxy Customers');",
+                  "    pm.expect(body.content).to.include('tenant_group_');",
+                  "});"
+                ]
+              }
+            }
+          ]
+        },
+        {
+          "name": "Proxy: Create Entity (tenant)",
+          "request": {
+            "method": "POST",
+            "header": [{ "key": "Content-Type", "value": "application/json" }],
+            "body": {
+              "mode": "raw",
+              "raw": "{\"command\": \"create\", \"entity\": \"tenant\", \"parent\": {\"root\": \"definitions\"}, \"attributes\": {\"name\": \"Proxy Example Corp\", \"slug\": \"proxy-example-corp\"}}"
+            },
+            "url": {
+              "raw": "{{frontend_base_url}}/api/diagrams/{{diagram_id}}/commands",
+              "host": ["{{frontend_base_url}}"],
+              "path": ["api", "diagrams", "{{diagram_id}}", "commands"]
+            }
+          },
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test('Status code is 201', function () {",
+                  "    pm.response.to.have.status(201);",
+                  "});",
+                  "",
+                  "pm.test('Tenant created through proxy', function () {",
+                  "    const body = pm.response.json();",
+                  "    pm.expect(body.content).to.include('tenant: Proxy Example Corp');",
+                  "    pm.expect(body.content).to.include('tenant_');",
+                  "});"
+                ]
+              }
+            }
+          ]
+        },
+        {
+          "name": "Proxy: Create Entity (site-group)",
+          "request": {
+            "method": "POST",
+            "header": [{ "key": "Content-Type", "value": "application/json" }],
+            "body": {
+              "mode": "raw",
+              "raw": "{\"command\": \"create\", \"entity\": \"site-group\", \"parent\": {\"root\": \"definitions\"}, \"attributes\": {\"name\": \"Proxy Campus\", \"slug\": \"proxy-campus\"}}"
+            },
+            "url": {
+              "raw": "{{frontend_base_url}}/api/diagrams/{{diagram_id}}/commands",
+              "host": ["{{frontend_base_url}}"],
+              "path": ["api", "diagrams", "{{diagram_id}}", "commands"]
+            }
+          },
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test('Status code is 201', function () {",
+                  "    pm.response.to.have.status(201);",
+                  "});",
+                  "",
+                  "pm.test('Site-group created through proxy', function () {",
+                  "    const body = pm.response.json();",
+                  "    pm.expect(body.content).to.include('site-group: Proxy Campus');",
+                  "    pm.expect(body.content).to.include('site_group_');",
+                  "});"
+                ]
+              }
+            }
+          ]
+        },
+        {
+          "name": "Proxy: Create Entity (device-type)",
+          "request": {
+            "method": "POST",
+            "header": [{ "key": "Content-Type", "value": "application/json" }],
+            "body": {
+              "mode": "raw",
+              "raw": "{\"command\": \"create\", \"entity\": \"device-type\", \"parent\": {\"root\": \"definitions\"}, \"attributes\": {\"slug\": \"proxy-c9300\", \"model\": \"Proxy Catalyst 9300\", \"u_height\": \"1\"}}"
+            },
+            "url": {
+              "raw": "{{frontend_base_url}}/api/diagrams/{{diagram_id}}/commands",
+              "host": ["{{frontend_base_url}}"],
+              "path": ["api", "diagrams", "{{diagram_id}}", "commands"]
+            }
+          },
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test('Status code is 201', function () {",
+                  "    pm.response.to.have.status(201);",
+                  "});",
+                  "",
+                  "pm.test('Device-type created through proxy', function () {",
+                  "    const body = pm.response.json();",
+                  "    pm.expect(body.content).to.include('device_type_');",
+                  "    pm.expect(body.content).to.include('model: Proxy Catalyst 9300');",
+                  "});"
+                ]
+              }
+            }
+          ]
+        },
+        {
+          "name": "Proxy: Create Entity (virtual-chassis)",
+          "request": {
+            "method": "POST",
+            "header": [{ "key": "Content-Type", "value": "application/json" }],
+            "body": {
+              "mode": "raw",
+              "raw": "{\"command\": \"create\", \"entity\": \"virtual-chassis\", \"parent\": {\"root\": \"definitions\"}, \"attributes\": {\"name\": \"Proxy VC-1\"}}"
+            },
+            "url": {
+              "raw": "{{frontend_base_url}}/api/diagrams/{{diagram_id}}/commands",
+              "host": ["{{frontend_base_url}}"],
+              "path": ["api", "diagrams", "{{diagram_id}}", "commands"]
+            }
+          },
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test('Status code is 201', function () {",
+                  "    pm.response.to.have.status(201);",
+                  "});",
+                  "",
+                  "pm.test('Virtual-chassis created through proxy', function () {",
+                  "    const body = pm.response.json();",
+                  "    pm.expect(body.content).to.include('virtual-chassis: Proxy VC-1');",
+                  "    pm.expect(body.content).to.include('virtual_chassis_');",
+                  "});"
+                ]
+              }
+            }
+          ]
         }
       ]
     },

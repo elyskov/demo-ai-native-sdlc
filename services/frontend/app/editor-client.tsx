@@ -70,9 +70,22 @@ type GetElementResponse = {
   attributeOrder?: string[]
 }
 
+type AttributeDefinition = {
+  required: boolean
+  type: 'string' | 'number' | 'integer' | 'boolean'
+  maxLength: number
+  pattern?: string
+  value?: Array<string | number | boolean>
+  label?: string[]
+  nullable: boolean
+  minimum?: number
+  maximum?: number
+}
+
 type EntityTypeDetails = {
   attributes: string[]
   requiredAttributes: string[]
+  attributeDefinitions?: Record<string, AttributeDefinition>
 }
 
 type CreateParentRef =
@@ -144,7 +157,6 @@ export function DiagramEditor({ diagram }: DiagramEditorProps) {
   const loadEntityTypes = async (parent: CreateParentRef) => {
     setEntityTypesLoaded(false)
     setEntityTypes([])
-    setEntityTypeDetails({})
 
     try {
       const res = await fetch(`/api/diagrams/${diagram.id}/commands`, {
@@ -164,13 +176,47 @@ export function DiagramEditor({ diagram }: DiagramEditorProps) {
       const data = (await res.json()) as { types: string[]; details?: Record<string, EntityTypeDetails> }
       setEntityTypes(data.types)
       if (data.details && typeof data.details === 'object') {
-        setEntityTypeDetails(data.details)
+        setEntityTypeDetails((current) => ({ ...current, ...data.details }))
       }
       setEntityTypesLoaded(true)
     } catch (error) {
       console.error('Failed to load entity types:', error)
       setErrorMessage('Failed to load entity types')
       setEntityTypesLoaded(true)
+    }
+  }
+
+  const coerceParentRef = (parent: unknown): CreateParentRef | null => {
+    if (!parent || typeof parent !== 'object') return null
+    const anyParent = parent as any
+    if (anyParent.root === 'definitions' || anyParent.root === 'infrastructure') {
+      return { root: anyParent.root }
+    }
+    if (typeof anyParent.entity === 'string' && typeof anyParent.id === 'string') {
+      return { entity: anyParent.entity, id: anyParent.id }
+    }
+    return null
+  }
+
+  const mergeEntityTypeDetailsForParent = async (parent: CreateParentRef | null) => {
+    if (!parent) return
+    try {
+      const res = await fetch(`/api/diagrams/${diagram.id}/commands`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          command: 'list-types',
+          entity: 'infrastructure',
+          parent,
+        }),
+      })
+      if (!res.ok) return
+      const data = (await res.json()) as { details?: Record<string, EntityTypeDetails> }
+      if (data.details && typeof data.details === 'object') {
+        setEntityTypeDetails((current) => ({ ...current, ...data.details }))
+      }
+    } catch {
+      // best-effort only
     }
   }
 
@@ -199,7 +245,23 @@ export function DiagramEditor({ diagram }: DiagramEditorProps) {
       next.push({ key, value })
     }
 
-    return next.length ? next : current
+    if (!next.length) return current
+
+    // If a model attribute is an enum and required, default to the first allowed value
+    // so the UI doesn't display a "default" selection while still submitting an empty string.
+    for (const item of next) {
+      const key = item.key.trim()
+      if (!key) continue
+      if (item.value.trim() !== '') continue
+      if (!details.requiredAttributes.includes(key)) continue
+      const def = details.attributeDefinitions?.[key]
+      if (!def?.value?.length) continue
+      if (def.nullable) continue
+      const dv = getDefaultEnumValue(entityType, key)
+      if (dv != null) item.value = dv
+    }
+
+    return next
   }
 
   const slugify = (value: string) => {
@@ -208,6 +270,120 @@ export function DiagramEditor({ diagram }: DiagramEditorProps) {
       .toLowerCase()
       .replace(/[^a-z0-9]+/g, '-')
       .replace(/^-+|-+$/g, '')
+  }
+
+  const getAttributeDefinition = (entityType: string, key: string): AttributeDefinition | undefined => {
+    const details = entityTypeDetails[entityType]
+    return details?.attributeDefinitions?.[key]
+  }
+
+  const getDefaultEnumValue = (entityType: string, key: string): string | null => {
+    const def = getAttributeDefinition(entityType, key)
+    if (!def?.value?.length) return null
+    const values = def.value.map((v) => String(v))
+    if (values.includes('active')) return 'active'
+    return values[0] ?? null
+  }
+
+  const generateAutoSlug = (entityType: string, name: string): string => {
+    let next = slugify(name)
+    const def = getAttributeDefinition(entityType, 'slug')
+    if (def?.maxLength && next.length > def.maxLength) {
+      next = next.slice(0, def.maxLength)
+    }
+    if (def?.pattern) {
+      try {
+        const re = new RegExp(def.pattern)
+        if (next && !re.test(next)) {
+          return ''
+        }
+      } catch {
+        // Backend fails fast on invalid patterns; ignore here.
+      }
+    }
+    return next
+  }
+
+  const validateSingleAttributeValue = (entityType: string, key: string, value: string): string | null => {
+    const def = getAttributeDefinition(entityType, key)
+    if (!def) return null
+
+    const raw = value
+    const trimmed = raw.trim()
+
+    if (trimmed === '') {
+      if (def.nullable) return null
+      if (def.required) return `Missing required attribute '${key}' for '${entityType}'`
+      return null
+    }
+
+    if (def.type === 'string') {
+      if (raw.length > def.maxLength) {
+        return `Invalid attribute '${key}' for '${entityType}': exceeds maxLength ${def.maxLength}`
+      }
+    }
+
+    let typed: string | number | boolean = trimmed
+
+    if (def.type === 'boolean') {
+      if (trimmed !== 'true' && trimmed !== 'false') {
+        return `Invalid attribute '${key}' for '${entityType}': expected boolean (true/false)`
+      }
+      typed = trimmed === 'true'
+    }
+
+    if (def.type === 'number' || def.type === 'integer') {
+      const num = Number(trimmed)
+      if (!Number.isFinite(num)) {
+        return `Invalid attribute '${key}' for '${entityType}': expected ${def.type}`
+      }
+      if (def.type === 'integer' && !Number.isInteger(num)) {
+        return `Invalid attribute '${key}' for '${entityType}': expected integer`
+      }
+      typed = num
+
+      if (def.minimum !== undefined && num < def.minimum) {
+        return `Invalid attribute '${key}' for '${entityType}': must be >= ${def.minimum}`
+      }
+      if (def.maximum !== undefined && num > def.maximum) {
+        return `Invalid attribute '${key}' for '${entityType}': must be <= ${def.maximum}`
+      }
+    }
+
+    if (def.pattern) {
+      try {
+        const re = new RegExp(def.pattern)
+        const testValue = (def.type === 'number' || def.type === 'integer') ? trimmed : String(typed)
+        if (!re.test(testValue)) {
+          return `Invalid attribute '${key}' for '${entityType}': does not match pattern ${def.pattern}`
+        }
+      } catch {
+        // Backend fails fast on invalid patterns.
+      }
+    }
+
+    if (def.value?.length) {
+      const allowed = def.value
+      const ok = def.type === 'string'
+        ? allowed.some((v) => String(v) === String(typed))
+        : allowed.some((v) => v === typed)
+      if (!ok) {
+        return `Invalid attribute '${key}' for '${entityType}': must be one of [${allowed.map(String).join(', ')}]`
+      }
+    }
+
+    return null
+  }
+
+  const validateAttributesBeforeSubmit = (entityType: string, list: EntityAttribute[]): string | null => {
+    const defs = entityTypeDetails[entityType]?.attributeDefinitions
+    if (!defs) return null
+
+    for (const key of Object.keys(defs)) {
+      const err = validateSingleAttributeValue(entityType, key, getAttributeValue(list, key))
+      if (err) return err
+    }
+    return null
   }
 
   const parseApiErrorMessage = async (res: Response) => {
@@ -262,9 +438,11 @@ export function DiagramEditor({ diagram }: DiagramEditorProps) {
     )
 
     if (!slugTouchedRef.current && hasSlugField) {
-      const nextSlug = slugify(nextName)
+      const nextSlug = generateAutoSlug(entityType, nextName)
       slugAutoRef.current = nextSlug
-      updates.slug = nextSlug
+      if (nextSlug) {
+        updates.slug = nextSlug
+      }
     }
 
     applyAttributeUpdates(entityType, updates)
@@ -348,6 +526,9 @@ export function DiagramEditor({ diagram }: DiagramEditorProps) {
       return
     }
 
+    // Avoid showing stale context from a previously selected element.
+    setAttributes([])
+
     try {
       const res = await fetch(`/api/diagrams/${diagram.id}/commands`, {
         method: 'POST',
@@ -365,6 +546,13 @@ export function DiagramEditor({ diagram }: DiagramEditorProps) {
       }
 
       const data = (await res.json()) as GetElementResponse
+
+      // Best-effort: load attribute definitions for the selected entity type.
+      // Our existing list-types calls load details for *children* of the selected element,
+      // but editing needs details for the selected type itself, which is available when
+      // listing types for the element's parent context.
+      void mergeEntityTypeDetailsForParent(coerceParentRef(data.parent))
+
       const order = Array.isArray(data.attributeOrder) ? data.attributeOrder : Object.keys(data.attributes ?? {}).sort()
       const next = order.map((key) => ({ key, value: data.attributes?.[key] == null ? '' : String(data.attributes[key]) }))
       const ensured = ensureAttributesForEntityType(ref.entity, next.length ? next : [{ key: 'name', value: '' }])
@@ -380,7 +568,7 @@ export function DiagramEditor({ diagram }: DiagramEditorProps) {
     } catch (error) {
       console.error('Failed to load selected element context:', error)
       setErrorMessage('Failed to load selected element')
-      // Keep previous attribute inputs if fetch fails.
+      setAttributes([])
     }
   }
 
@@ -406,12 +594,13 @@ export function DiagramEditor({ diagram }: DiagramEditorProps) {
 
     setAttributes(ensureAttributesForEntityType(entityType, [{ key: 'name', value: '' }]))
 
-    // Anchor the "Add" popover near the diagram area (Popover needs an anchor/trigger).
+    // Anchor the "Add" popover to the top edge of the editing area.
+    // Use viewport coords because the Add popover anchor is position: fixed.
     const rect = contextMenuRef.current?.getBoundingClientRect()
     if (rect) {
-      setAddPopoverPoint({ x: rect.left + rect.width / 2, y: rect.top + rect.height / 2 })
+      setAddPopoverPoint({ x: rect.left + rect.width / 2, y: rect.top })
     } else {
-      setAddPopoverPoint({ x: window.innerWidth / 2, y: window.innerHeight / 2 })
+      setAddPopoverPoint({ x: window.innerWidth / 2, y: 16 })
     }
 
     // IMPORTANT:
@@ -444,11 +633,22 @@ export function DiagramEditor({ diagram }: DiagramEditorProps) {
 
       const required = new Set(entityTypeDetails[createEntityType]?.requiredAttributes ?? [])
       if (required.has('slug') && !attrs.slug && typeof attrs.name === 'string' && attrs.name.trim()) {
-        const s = slugify(attrs.name)
+        const s = generateAutoSlug(createEntityType, attrs.name)
         if (s) attrs.slug = s
       }
       if (required.has('status') && !attrs.status) {
-        attrs.status = 'active'
+        attrs.status = getDefaultEnumValue(createEntityType, 'status') ?? 'active'
+      }
+
+      const defs = entityTypeDetails[createEntityType]?.attributeDefinitions
+      if (defs) {
+        for (const key of Object.keys(defs)) {
+          const err = validateSingleAttributeValue(createEntityType, key, attrs[key] ?? '')
+          if (err) {
+            setAddErrorMessage(err)
+            return
+          }
+        }
       }
 
       const res = await fetch(
@@ -492,7 +692,14 @@ export function DiagramEditor({ diagram }: DiagramEditorProps) {
     }
 
     setLoading(true)
+    setErrorMessage(null)
     try {
+      const err = validateAttributesBeforeSubmit(current.entity, attributes)
+      if (err) {
+        setErrorMessage(err)
+        return
+      }
+
       const attrs: Record<string, string> = {}
       for (const { key, value } of attributes) {
         const k = key.trim()
@@ -830,7 +1037,7 @@ export function DiagramEditor({ diagram }: DiagramEditorProps) {
                 </div>
 
                 {errorMessage && (
-                  <div className="rounded-md border border-destructive/40 bg-destructive/10 px-3 py-2 text-sm text-destructive">
+                  <div className="rounded-md border border-destructive/40 bg-destructive/10 px-3 py-2 text-sm text-destructive whitespace-pre-line">
                     {errorMessage}
                   </div>
                 )}
@@ -847,6 +1054,8 @@ export function DiagramEditor({ diagram }: DiagramEditorProps) {
 
                       const renderField = (key: string, required: boolean) => {
                         const value = getAttributeValue(attributes, key)
+                        const def = entityType ? getAttributeDefinition(entityType, key) : undefined
+                        const allowEmpty = Boolean(def && (def.nullable || !def.required))
                         const label = required ? (
                           <span className="inline-flex items-center gap-1">
                             <span>{key}</span>
@@ -866,11 +1075,38 @@ export function DiagramEditor({ diagram }: DiagramEditorProps) {
                         return (
                           <div key={key} className="grid gap-1">
                             <Label>{label}</Label>
-                            <Input
-                              value={value}
-                              onChange={(e) => onValueChange(e.target.value)}
-                              disabled={loading}
-                            />
+                            {def?.value ? (
+                              <select
+                                value={value}
+                                onChange={(e) => onValueChange(e.target.value)}
+                                className="flex h-10 w-full rounded-md border border-input bg-background px-3 py-2 text-sm"
+                                disabled={loading}
+                              >
+                                {allowEmpty && <option value="">(empty)</option>}
+                                {def.value.map((v, i) => (
+                                  <option key={`${String(v)}:${i}`} value={String(v)}>
+                                    {def.label?.[i] ?? String(v)}
+                                  </option>
+                                ))}
+                              </select>
+                            ) : def?.type === 'boolean' ? (
+                              <select
+                                value={value}
+                                onChange={(e) => onValueChange(e.target.value)}
+                                className="flex h-10 w-full rounded-md border border-input bg-background px-3 py-2 text-sm"
+                                disabled={loading}
+                              >
+                                {allowEmpty && <option value="">(empty)</option>}
+                                <option value="true">true</option>
+                                <option value="false">false</option>
+                              </select>
+                            ) : (
+                              <Input
+                                value={value}
+                                onChange={(e) => onValueChange(e.target.value)}
+                                disabled={loading}
+                              />
+                            )}
                           </div>
                         )
                       }
@@ -950,7 +1186,13 @@ export function DiagramEditor({ diagram }: DiagramEditorProps) {
             <span style={{ position: 'fixed', left: addPopoverPoint.x, top: addPopoverPoint.y, width: 1, height: 1 }} />
           </PopoverAnchor>
         )}
-        <PopoverContent className="w-80" align="center" sideOffset={12}>
+        <PopoverContent
+          className="w-80 max-h-[60vh] overflow-auto"
+          align="center"
+          sideOffset={0}
+          collisionPadding={16}
+          collisionBoundary={contextMenuRef.current ?? undefined}
+        >
           <div className="grid gap-4">
             <div className="space-y-2">
               <h4 className="font-medium leading-none">Add New Entity</h4>
@@ -997,6 +1239,33 @@ export function DiagramEditor({ diagram }: DiagramEditorProps) {
                 <Label>Attributes</Label>
                 {attributes.map((attr, idx) => (
                   <div key={idx} className="flex gap-2">
+                    {(() => {
+                      const entityType = createEntityType
+                      const key = attr.key.trim()
+                      const def = entityType && key ? getAttributeDefinition(entityType, key) : undefined
+                      const isModelKey = Boolean(def)
+                      const allowEmpty = Boolean(def && (def.nullable || !def.required))
+
+                      const updateValue = (next: string) => {
+                        if (!entityType) {
+                          const newAttrs = [...attributes]
+                          newAttrs[idx].value = next
+                          setAttributes(newAttrs)
+                          return
+                        }
+                        if (!key) {
+                          const newAttrs = [...attributes]
+                          newAttrs[idx].value = next
+                          setAttributes(newAttrs)
+                          return
+                        }
+                        if (key === 'name') return handleNameValueChange(entityType, next)
+                        if (key === 'slug') return handleSlugValueChange(entityType, next)
+                        applyAttributeUpdates(entityType, { [key]: next })
+                      }
+
+                      return (
+                        <>
                     <Input
                       placeholder="Key"
                       value={attr.key}
@@ -1005,40 +1274,44 @@ export function DiagramEditor({ diagram }: DiagramEditorProps) {
                         newAttrs[idx].key = e.target.value
                         setAttributes(newAttrs)
                       }}
-                      disabled={loading}
+                      disabled={loading || isModelKey}
                     />
-                    <Input
-                      placeholder="Value"
-                      value={attr.value}
-                      onChange={(e) => {
-                        const entityType = createEntityType
-                        if (!entityType) {
-                          const newAttrs = [...attributes]
-                          newAttrs[idx].value = e.target.value
-                          setAttributes(newAttrs)
-                          return
-                        }
-
-                        const key = attr.key.trim()
-                        if (!key) {
-                          const newAttrs = [...attributes]
-                          newAttrs[idx].value = e.target.value
-                          setAttributes(newAttrs)
-                          return
-                        }
-                        if (key === 'name') {
-                          handleNameValueChange(entityType, e.target.value)
-                          return
-                        }
-                        if (key === 'slug') {
-                          handleSlugValueChange(entityType, e.target.value)
-                          return
-                        }
-
-                        applyAttributeUpdates(entityType, { [key]: e.target.value })
-                      }}
-                      disabled={loading}
-                    />
+                    {def?.value ? (
+                      <select
+                        value={attr.value}
+                        onChange={(e) => updateValue(e.target.value)}
+                        className="flex h-10 w-full rounded-md border border-input bg-background px-3 py-2 text-sm"
+                        disabled={loading}
+                      >
+                        {allowEmpty && <option value="">(empty)</option>}
+                        {def.value.map((v, i) => (
+                          <option key={`${String(v)}:${i}`} value={String(v)}>
+                            {def.label?.[i] ?? String(v)}
+                          </option>
+                        ))}
+                      </select>
+                    ) : def?.type === 'boolean' ? (
+                      <select
+                        value={attr.value}
+                        onChange={(e) => updateValue(e.target.value)}
+                        className="flex h-10 w-full rounded-md border border-input bg-background px-3 py-2 text-sm"
+                        disabled={loading}
+                      >
+                        {allowEmpty && <option value="">(empty)</option>}
+                        <option value="true">true</option>
+                        <option value="false">false</option>
+                      </select>
+                    ) : (
+                      <Input
+                        placeholder="Value"
+                        value={attr.value}
+                        onChange={(e) => updateValue(e.target.value)}
+                        disabled={loading}
+                      />
+                    )}
+                        </>
+                      )
+                    })()}
                   </div>
                 ))}
               </div>

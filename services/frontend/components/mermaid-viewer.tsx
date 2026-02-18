@@ -188,12 +188,13 @@ export const MermaidViewer = forwardRef<MermaidViewerHandle, MermaidViewerProps>
 
           // Mermaid interaction: bind to the rendered SVG DOM (via Mermaid API pipeline).
           // We intentionally attach listeners after render and avoid brittle global selectors.
-          // Order matters: put longer tokens before their prefixes (e.g., site_group before site)
-          const entityAlternation = '(site[_-]group|region|site|location|rack|device|if|container|node)'
           const rootAlternation = '(definitions|infrastructure|connections)'
-          // NOTE: Domain object ids are URL-friendly hex strings today; Mermaid may append
-          // internal suffixes like "-label"/"-text" to element ids. Avoid matching those.
-          const logicalIdRegex = new RegExp(`(attr_)?${entityAlternation}_[A-Za-z0-9]+|${rootAlternation}`)
+          // NOTE:
+          // - Backend Mermaid ids are of the form: <entityPrefix>_<objectId> (with hyphens normalized to underscores).
+          // - Some entities (like device-role) become device_role_... in Mermaid.
+          // - Mermaid may append internal suffixes like "-label"/"-text" to ids.
+          // Keep extraction generic so new entity types remain clickable.
+          const logicalIdRegex = new RegExp(`(attr_)?[a-z][a-z0-9_]*_[A-Za-z0-9]+|${rootAlternation}`)
 
           const extractLogicalId = (value: string | null | undefined): string | null => {
             const raw = value?.trim()
