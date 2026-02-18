@@ -109,10 +109,13 @@ entities:
       allowed:
         - entity: location
           field: parent
-        - entity: site
-          field: site
+        - root: infrastructure
 
     links:
+      site:
+        entity: site
+        field: site
+        required: true
       tenant:
         entity: tenant
         field: tenant
@@ -221,10 +224,13 @@ entities:
       allowed:
         - entity: location
           field: location
-        - entity: site
-          field: site
+        - root: infrastructure
 
     links:
+      site:
+        entity: site
+        field: site
+        required: false
       tenant:
         entity: tenant
         field: tenant
@@ -393,12 +399,11 @@ entities:
     parent:
       required: true
       allowed:
-        - entity: site
-          field: site
         - entity: location
           field: location
         - entity: rack
           field: rack
+        - root: infrastructure
 
     links:
       device-role:
@@ -408,6 +413,10 @@ entities:
       device-type:
         entity: device-type
         field: device_type
+        required: true
+      site:
+        entity: site
+        field: site
         required: true
       tenant:
         entity: tenant
