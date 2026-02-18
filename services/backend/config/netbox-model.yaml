@@ -27,8 +27,10 @@ entities:
     attributes:
       name:
         required: true
+        maxLength: 100
       slug:
         required: true
+        pattern: ^[-a-zA-Z0-9_]+$
 
 
   site-group:
@@ -85,6 +87,14 @@ entities:
         required: true
       status:
         required: true
+        value: [planned, staging, active, decommissioning, retired]
+        label: [Planned, Staging, Active, Decommissioning, Retired]
+      latitude:
+        type: number
+        pattern: ^\d{2}\.\d{6}$
+        nullable: true
+        minimum: -90
+        maximum: 90
 
 
   location:
@@ -187,6 +197,12 @@ entities:
         required: true
       width:
         required: true
+        value: [10, 19, 21, 23]
+        label: [10 inches, 19 inches, 21 inches, 23 inches]
+      weight:
+        type: number
+      desc_units:
+        type: boolean
       u_height:
         required: true
       starting_unit:
@@ -283,6 +299,7 @@ entities:
         required: true
       color:
         required: true
+        pattern: ^[0-9a-f]{6}$
 
 
   platform:

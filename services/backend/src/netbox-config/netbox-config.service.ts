@@ -9,6 +9,7 @@ import type {
   NetboxModelConfig,
   NetboxToMermaidConfig,
 } from './netbox-config.models';
+import { validateNetboxModelConfig } from './netbox-model-validation';
 
 @Injectable()
 export class NetboxConfigService implements OnModuleInit {
@@ -104,14 +105,7 @@ export class NetboxConfigService implements OnModuleInit {
   }
 
   private validateModelConfig(model: NetboxModelConfig, filePath: string) {
-    if (!this.isRecord(model)) {
-      throw new Error(`Invalid NetBox model config: expected a YAML object in ${filePath}`);
-    }
-    if (!this.isRecord((model as any).entities)) {
-      throw new Error(
-        `Invalid NetBox model config: missing required section 'entities' in ${filePath}`,
-      );
-    }
+    validateNetboxModelConfig(model, filePath);
   }
 
   private validateMappingConfig(mapping: NetboxToMermaidConfig, filePath: string) {
