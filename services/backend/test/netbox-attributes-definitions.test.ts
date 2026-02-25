@@ -26,10 +26,11 @@ function expectThrows(fn: () => void, re: RegExp) {
 
 async function testModelConfigAcceptsNewFields() {
   const model = baseModel({
+    // Also validates field_groups/include_groups and array attribute types.
     site: {
+      include_groups: ['name_slug'],
       attributes: {
-        name: { required: true, maxLength: 100 },
-        slug: { required: true, pattern: '^[-a-zA-Z0-9_]+$' },
+        tags: { type: 'array', nullable: true, items: { type: 'string', pattern: '^[-a-zA-Z0-9_]+$' } },
         status: {
           required: true,
           value: ['planned', 'active'],
@@ -45,6 +46,15 @@ async function testModelConfigAcceptsNewFields() {
       },
     },
   });
+
+  (model as any).field_groups = {
+    name_slug: {
+      attributes: {
+        name: { required: true, maxLength: 100 },
+        slug: { required: true, pattern: '^[-a-zA-Z0-9_]+$' },
+      },
+    },
+  };
 
   validateNetboxModelConfig(model as any, 'netbox-model.yaml');
 }
@@ -76,6 +86,39 @@ async function testModelConfigRejectsBadRegex() {
   expectThrows(
     () => validateNetboxModelConfig(model as any, 'netbox-model.yaml'),
     /invalid pattern regex/i,
+  );
+}
+
+async function testModelConfigRejectsArrayWithoutItems() {
+  const model = baseModel({
+    region: {
+      attributes: {
+        tags: { type: 'array' },
+      },
+    },
+  });
+
+  expectThrows(
+    () => validateNetboxModelConfig(model as any, 'netbox-model.yaml'),
+    /type 'array' but missing\/invalid 'items'/i,
+  );
+}
+
+async function testModelConfigRejectsUnknownIncludeGroup() {
+  const model = baseModel({
+    site: {
+      include_groups: ['missing'],
+      attributes: {},
+    },
+  });
+
+  (model as any).field_groups = {
+    present: { attributes: { name: { required: true } } },
+  };
+
+  expectThrows(
+    () => validateNetboxModelConfig(model as any, 'netbox-model.yaml'),
+    /references unknown group/i,
   );
 }
 
@@ -179,12 +222,31 @@ async function testAttributeValidationEnumStringifiedWhenTypeString() {
   );
 }
 
+async function testAttributeValidationArrayItemsPattern() {
+  expectThrows(
+    () => validateEntityAttributes(
+      'site',
+      { tags: ['good', 'bad tag'] },
+      { tags: { type: 'array', items: { type: 'string', pattern: '^[-a-zA-Z0-9_]+$' } } },
+    ),
+    /does not match pattern/i,
+  );
+
+  validateEntityAttributes(
+    'site',
+    { tags: ['good-tag', 'tag_2'] },
+    { tags: { type: 'array', items: { type: 'string', pattern: '^[-a-zA-Z0-9_]+$' } } },
+  );
+}
+
 async function main() {
   await testModelConfigAcceptsNewFields();
   await testModelConfigRejectsUnsupportedType();
   await testModelConfigRejectsBadRegex();
+  await testModelConfigRejectsArrayWithoutItems();
   await testModelConfigRejectsLabelMismatch();
   await testModelConfigRejectsMinimumGreaterThanMaximum();
+  await testModelConfigRejectsUnknownIncludeGroup();
 
   await testAttributeValidationMaxLength();
   await testAttributeValidationPattern();
@@ -193,6 +255,7 @@ async function main() {
   await testAttributeValidationIntegerRejectsDecimals();
   await testAttributeValidationBoolean();
   await testAttributeValidationEnumStringifiedWhenTypeString();
+  await testAttributeValidationArrayItemsPattern();
 
   // eslint-disable-next-line no-console
   console.log('netbox-attributes-definitions.test.ts: OK');

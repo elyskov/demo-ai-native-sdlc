@@ -6,6 +6,16 @@ roots:
   infrastructure:
     description: "Physical and logical infrastructure"
 
+field_groups:
+  name_slug:
+    attributes:
+      name:
+        required: true
+        maxLength: 100
+      slug:
+        required: true
+        pattern: ^[-a-zA-Z0-9_]+$
+
 entities:
 
   region:
@@ -24,13 +34,18 @@ entities:
 
     links: {}
 
+    capabilities:
+      custom_fields: true
+
+    include_groups: [name_slug]
+
     attributes:
-      name:
-        required: true
-        maxLength: 100
-      slug:
-        required: true
-        pattern: ^[-a-zA-Z0-9_]+$
+      tags:
+        type: array
+        nullable: true
+        items:
+          type: string
+          pattern: ^[-a-zA-Z0-9_]+$
 
 
   site-group:
@@ -49,11 +64,18 @@ entities:
 
     links: {}
 
+    capabilities:
+      custom_fields: true
+
+    include_groups: [name_slug]
+
     attributes:
-      name:
-        required: true
-      slug:
-        required: true
+      tags:
+        type: array
+        nullable: true
+        items:
+          type: string
+          pattern: ^[-a-zA-Z0-9_]+$
 
 
   site:
@@ -80,11 +102,12 @@ entities:
         field: group
         required: false
 
+    capabilities:
+      custom_fields: true
+
+    include_groups: [name_slug]
+
     attributes:
-      name:
-        required: true
-      slug:
-        required: true
       status:
         required: true
         value: [planned, staging, active, decommissioning, retired]
@@ -95,6 +118,12 @@ entities:
         nullable: true
         minimum: -90
         maximum: 90
+      tags:
+        type: array
+        nullable: true
+        items:
+          type: string
+          pattern: ^[-a-zA-Z0-9_]+$
 
 
   location:
@@ -121,13 +150,20 @@ entities:
         field: tenant
         required: false
 
+    capabilities:
+      custom_fields: true
+
+    include_groups: [name_slug]
+
     attributes:
-      name:
-        required: true
-      slug:
-        required: true
       status:
         required: true
+      tags:
+        type: array
+        nullable: true
+        items:
+          type: string
+          pattern: ^[-a-zA-Z0-9_]+$
 
 
   tenant-group:
@@ -146,11 +182,18 @@ entities:
 
     links: {}
 
+    capabilities:
+      custom_fields: true
+
+    include_groups: [name_slug]
+
     attributes:
-      name:
-        required: true
-      slug:
-        required: true
+      tags:
+        type: array
+        nullable: true
+        items:
+          type: string
+          pattern: ^[-a-zA-Z0-9_]+$
 
 
   tenant:
@@ -169,11 +212,18 @@ entities:
 
     links: {}
 
+    capabilities:
+      custom_fields: true
+
+    include_groups: [name_slug]
+
     attributes:
-      name:
-        required: true
-      slug:
-        required: true
+      tags:
+        type: array
+        nullable: true
+        items:
+          type: string
+          pattern: ^[-a-zA-Z0-9_]+$
 
 
   rack-type:
@@ -190,6 +240,9 @@ entities:
           field: manufacturer
 
     links: {}
+
+    capabilities:
+      custom_fields: true
 
     attributes:
       slug:
@@ -210,6 +263,12 @@ entities:
         required: true
       starting_unit:
         required: true
+      tags:
+        type: array
+        nullable: true
+        items:
+          type: string
+          pattern: ^[-a-zA-Z0-9_]+$
 
 
   rack:
@@ -244,6 +303,9 @@ entities:
         field: role
         required: false
 
+    capabilities:
+      custom_fields: true
+
     attributes:
       name:
         required: true
@@ -255,6 +317,12 @@ entities:
         required: true
       starting_unit:
         required: true
+      tags:
+        type: array
+        nullable: true
+        items:
+          type: string
+          pattern: ^[-a-zA-Z0-9_]+$
 
 
   manufacturer:
@@ -271,11 +339,18 @@ entities:
 
     links: {}
 
+    capabilities:
+      custom_fields: true
+
+    include_groups: [name_slug]
+
     attributes:
-      name:
-        required: true
-      slug:
-        required: true
+      tags:
+        type: array
+        nullable: true
+        items:
+          type: string
+          pattern: ^[-a-zA-Z0-9_]+$
 
 
   device-role:
@@ -298,14 +373,21 @@ entities:
         field: config_template
         required: false
 
+    capabilities:
+      custom_fields: true
+
+    include_groups: [name_slug]
+
     attributes:
-      name:
-        required: true
-      slug:
-        required: true
       color:
         required: true
         pattern: ^[0-9a-f]{6}$
+      tags:
+        type: array
+        nullable: true
+        items:
+          type: string
+          pattern: ^[-a-zA-Z0-9_]+$
 
 
   platform:
@@ -332,11 +414,18 @@ entities:
         field: config_template
         required: false
 
+    capabilities:
+      custom_fields: true
+
+    include_groups: [name_slug]
+
     attributes:
-      name:
-        required: true
-      slug:
-        required: true
+      tags:
+        type: array
+        nullable: true
+        items:
+          type: string
+          pattern: ^[-a-zA-Z0-9_]+$
 
 
   device-type:
@@ -361,6 +450,9 @@ entities:
         field: default_platform
         required: true
 
+    capabilities:
+      custom_fields: true
+
     attributes:
       slug:
         required: true
@@ -368,6 +460,12 @@ entities:
         required: true
       u_height:
         required: true
+      tags:
+        type: array
+        nullable: true
+        items:
+          type: string
+          pattern: ^[-a-zA-Z0-9_]+$
 
 
   virtual-chassis:
@@ -384,9 +482,18 @@ entities:
 
     links: {}
 
+    capabilities:
+      custom_fields: true
+
     attributes:
       name:
         required: true
+      tags:
+        type: array
+        nullable: true
+        items:
+          type: string
+          pattern: ^[-a-zA-Z0-9_]+$
 
 
   device:
@@ -435,11 +542,20 @@ entities:
         field: virtual_chassis
         required: false
 
+    capabilities:
+      custom_fields: true
+
     attributes:
       name:
         required: false
       status:
         required: true
+      tags:
+        type: array
+        nullable: true
+        items:
+          type: string
+          pattern: ^[-a-zA-Z0-9_]+$
 
 
   interface:
@@ -457,8 +573,17 @@ entities:
 
     links: {}
 
+    capabilities:
+      custom_fields: true
+
     attributes:
       name:
         required: true
       type:
         required: true
+      tags:
+        type: array
+        nullable: true
+        items:
+          type: string
+          pattern: ^[-a-zA-Z0-9_]+$
