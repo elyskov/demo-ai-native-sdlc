@@ -39,6 +39,8 @@ Backend behavior is driven by YAML configuration (see backend README for env var
 - `netbox-to-mermaid.yaml` defines Mermaid ids, templates, and roots.
 - `mermaid-styles.yaml` is optional (styling is skipped if missing).
 
+See [docs/architecture/NETBOX-MODEL.md](../architecture/NETBOX-MODEL.md) for the detailed `netbox-model.yaml` schema and validation rules.
+
 ## CSV export rules
 
 - Output must be deterministic and documented.
