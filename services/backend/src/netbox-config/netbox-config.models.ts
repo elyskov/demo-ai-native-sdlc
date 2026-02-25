@@ -1,9 +1,12 @@
-export type NetboxAttributeType = 'string' | 'number' | 'integer' | 'boolean';
+export type NetboxAttributeScalarType = 'string' | 'number' | 'integer' | 'boolean';
+
+export type NetboxAttributeType = NetboxAttributeScalarType | 'array';
 
 export type NetboxAttributeDefinition = {
   required?: boolean;
   maxLength?: number;
   type?: NetboxAttributeType;
+  items?: NetboxAttributeDefinition;
   pattern?: string;
   value?: Array<string | number | boolean>;
   label?: string[];
@@ -12,13 +15,22 @@ export type NetboxAttributeDefinition = {
   maximum?: number;
 };
 
+export type NetboxFieldGroup = {
+  attributes?: Record<string, NetboxAttributeDefinition>;
+};
+
 export type NetboxModelConfig = {
   version: number | string;
   roots: Record<string, { description?: string }>;
+  field_groups?: Record<string, NetboxFieldGroup>;
   entities: Record<
     string,
     {
       meta?: Record<string, unknown>;
+      capabilities?: {
+        custom_fields?: boolean;
+      };
+      include_groups?: string[];
       parent?: {
         required?: boolean;
         allowed?: Array<{ root?: string; entity?: string; field?: string }>;

@@ -1,7 +1,11 @@
-import type { NetboxAttributeDefinition, NetboxAttributeType } from '../../netbox-config/netbox-config.models';
+import type {
+  NetboxAttributeDefinition,
+  NetboxAttributeScalarType,
+  NetboxAttributeType,
+} from '../../netbox-config/netbox-config.models';
 
 export type CoercedAttributeValue = {
-  type: NetboxAttributeType;
+  type: NetboxAttributeScalarType;
   raw: unknown;
   rawString: string;
   value: string | number | boolean;
@@ -13,7 +17,7 @@ function isEmptyValue(value: unknown): boolean {
   return false;
 }
 
-function coerceValue(entity: string, key: string, type: NetboxAttributeType, raw: unknown): CoercedAttributeValue {
+function coerceScalarValue(entity: string, key: string, type: NetboxAttributeScalarType, raw: unknown): CoercedAttributeValue {
   const rawString = typeof raw === 'string' ? raw.trim() : String(raw);
 
   if (type === 'string') {
@@ -68,6 +72,50 @@ function coerceValue(entity: string, key: string, type: NetboxAttributeType, raw
   throw new Error(`Invalid attribute '${key}' for '${entity}': unsupported type '${type}'`);
 }
 
+function validateScalarRules(entity: string, key: string, coerced: CoercedAttributeValue, def: NetboxAttributeDefinition) {
+  const type = coerced.type;
+
+  if (type === 'string') {
+    const maxLength = def.maxLength ?? 100;
+    const s = String(coerced.value);
+    if (s.length > maxLength) {
+      throw new Error(`Invalid attribute '${key}' for '${entity}': exceeds maxLength ${maxLength}`);
+    }
+  }
+
+  if (def.pattern) {
+    const re = new RegExp(def.pattern);
+    // For numbers/integers we validate the original string input format when possible.
+    const testValue = (type === 'number' || type === 'integer') ? coerced.rawString : String(coerced.value);
+    if (!re.test(testValue)) {
+      throw new Error(`Invalid attribute '${key}' for '${entity}': does not match pattern ${def.pattern}`);
+    }
+  }
+
+  if (def.value) {
+    const allowed = def.value;
+    const ok =
+      type === 'string'
+        ? allowed.some((v) => String(v) === String(coerced.value))
+        : allowed.some((v) => v === coerced.value);
+    if (!ok) {
+      throw new Error(`Invalid attribute '${key}' for '${entity}': must be one of [${allowed.join(', ')}]`);
+    }
+  }
+
+  if (type === 'number' || type === 'integer') {
+    const num = coerced.value as number;
+
+    if (def.minimum !== undefined && num < def.minimum) {
+      throw new Error(`Invalid attribute '${key}' for '${entity}': must be >= ${def.minimum}`);
+    }
+
+    if (def.maximum !== undefined && num > def.maximum) {
+      throw new Error(`Invalid attribute '${key}' for '${entity}': must be <= ${def.maximum}`);
+    }
+  }
+}
+
 export function validateEntityAttributes(entity: string, attrs: Record<string, any>, definitions: Record<string, NetboxAttributeDefinition> | undefined) {
   const defs = definitions ?? {};
 
@@ -86,46 +134,34 @@ export function validateEntityAttributes(entity: string, attrs: Record<string, a
       continue;
     }
 
-    const coerced = coerceValue(entity, key, type, raw);
-
-    if (type === 'string') {
-      const maxLength = def.maxLength ?? 100;
-      const s = String(coerced.value);
-      if (s.length > maxLength) {
-        throw new Error(`Invalid attribute '${key}' for '${entity}': exceeds maxLength ${maxLength}`);
+    if (type === 'array') {
+      if (!Array.isArray(raw)) {
+        throw new Error(`Invalid attribute '${key}' for '${entity}': expected array`);
       }
+
+      const itemsDef = def.items;
+      if (!itemsDef) {
+        throw new Error(`Invalid attribute '${key}' for '${entity}': missing items definition`);
+      }
+      const itemType = (itemsDef.type ?? 'string') as NetboxAttributeType;
+      if (itemType === 'array') {
+        throw new Error(`Invalid attribute '${key}' for '${entity}': nested arrays are not supported`);
+      }
+
+      for (let i = 0; i < raw.length; i += 1) {
+        const itemRaw = raw[i];
+        if (isEmptyValue(itemRaw)) {
+          throw new Error(`Invalid attribute '${key}[${i}]' for '${entity}': empty value`);
+        }
+
+        const coerced = coerceScalarValue(entity, `${key}[${i}]`, itemType as NetboxAttributeScalarType, itemRaw);
+        validateScalarRules(entity, `${key}[${i}]`, coerced, itemsDef);
+      }
+
+      continue;
     }
 
-    if (def.pattern) {
-      const re = new RegExp(def.pattern);
-      // For numbers/integers we validate the original string input format when possible.
-      const testValue = (type === 'number' || type === 'integer') ? coerced.rawString : String(coerced.value);
-      if (!re.test(testValue)) {
-        throw new Error(`Invalid attribute '${key}' for '${entity}': does not match pattern ${def.pattern}`);
-      }
-    }
-
-    if (def.value) {
-      const allowed = def.value;
-      const ok =
-        type === 'string'
-          ? allowed.some((v) => String(v) === String(coerced.value))
-          : allowed.some((v) => v === coerced.value);
-      if (!ok) {
-        throw new Error(`Invalid attribute '${key}' for '${entity}': must be one of [${allowed.join(', ')}]`);
-      }
-    }
-
-    if (type === 'number' || type === 'integer') {
-      const num = coerced.value as number;
-
-      if (def.minimum !== undefined && num < def.minimum) {
-        throw new Error(`Invalid attribute '${key}' for '${entity}': must be >= ${def.minimum}`);
-      }
-
-      if (def.maximum !== undefined && num > def.maximum) {
-        throw new Error(`Invalid attribute '${key}' for '${entity}': must be <= ${def.maximum}`);
-      }
-    }
+    const coerced = coerceScalarValue(entity, key, type as NetboxAttributeScalarType, raw);
+    validateScalarRules(entity, key, coerced, def);
   }
 }

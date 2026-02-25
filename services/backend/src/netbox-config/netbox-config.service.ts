@@ -6,6 +6,7 @@ import * as yaml from 'js-yaml';
 import type {
   LoadedNetboxConfig,
   MermaidStylesConfig,
+  NetboxAttributeDefinition,
   NetboxModelConfig,
   NetboxToMermaidConfig,
 } from './netbox-config.models';
@@ -43,6 +44,8 @@ export class NetboxConfigService implements OnModuleInit {
       : this.defaultStylesConfig();
 
     this.validateModelConfig(model, modelPath);
+
+    const expandedModel = this.expandModelFieldGroups(model);
     this.validateMappingConfig(mapping, mappingPath);
 
     if (stylesRaw) {
@@ -51,10 +54,10 @@ export class NetboxConfigService implements OnModuleInit {
       this.logger.warn(`Mermaid styles config not found at ${stylesPath}; continuing without styles`);
     }
 
-    this.loaded = { model, mapping, styles };
+    this.loaded = { model: expandedModel, mapping, styles };
 
     this.logger.log(
-      `Loaded NetBox config: ${Object.keys(model.entities).length} entities, ${Object.keys(mapping.roots).length} roots`,
+      `Loaded NetBox config: ${Object.keys(expandedModel.entities).length} entities, ${Object.keys(mapping.roots).length} roots`,
     );
   }
 
@@ -106,6 +109,45 @@ export class NetboxConfigService implements OnModuleInit {
 
   private validateModelConfig(model: NetboxModelConfig, filePath: string) {
     validateNetboxModelConfig(model, filePath);
+  }
+
+  private expandModelFieldGroups(model: NetboxModelConfig): NetboxModelConfig {
+    const groups = model.field_groups;
+    if (!groups || !Object.keys(groups).length) return model;
+
+    const entities: NetboxModelConfig['entities'] = {};
+    for (const [entityKey, entityCfg] of Object.entries(model.entities ?? {})) {
+      const includeGroups = entityCfg.include_groups ?? [];
+      if (!includeGroups.length) {
+        entities[entityKey] = entityCfg;
+        continue;
+      }
+
+      const expandedAttributes: Record<string, NetboxAttributeDefinition> = {};
+
+      for (const groupKey of includeGroups) {
+        const groupAttrs = groups[groupKey]?.attributes ?? {};
+        for (const [attrKey, attrDef] of Object.entries(groupAttrs)) {
+          if (expandedAttributes[attrKey] !== undefined) continue;
+          expandedAttributes[attrKey] = attrDef;
+        }
+      }
+
+      const entityAttrs = entityCfg.attributes ?? {};
+      for (const [attrKey, attrDef] of Object.entries(entityAttrs)) {
+        expandedAttributes[attrKey] = attrDef;
+      }
+
+      entities[entityKey] = {
+        ...entityCfg,
+        attributes: expandedAttributes,
+      };
+    }
+
+    return {
+      ...model,
+      entities,
+    };
   }
 
   private validateMappingConfig(mapping: NetboxToMermaidConfig, filePath: string) {
